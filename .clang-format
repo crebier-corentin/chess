@@ -1,0 +1,8 @@
+﻿---
+BasedOnStyle: Microsoft
+IndentWidth: '4'
+BraceWrapping:
+  AfterEnum: true 
+  AfterExternBlock: false
+BreakBeforeBraces: Custom
+...
