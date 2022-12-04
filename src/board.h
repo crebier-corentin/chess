@@ -26,7 +26,7 @@ typedef struct PiecesList
     PiecesListLengths black;
 } PiecesList;
 
-void pieces_offset(PiecesList *pl, PieceType pt, Color c, int8_t *out_index, int8_t *out_len);
+void pieces_offset(PiecesList *pl, PieceType pt, Color c, int8_t *out_index, int8_t **out_len);
 void pieces_all_color_offset(PiecesList *pl, Color c, int8_t *out_index, int8_t *out_len);
 
 #define NO_EN_PASSANT (-9)
@@ -34,6 +34,7 @@ void pieces_all_color_offset(PiecesList *pl, Color c, int8_t *out_index, int8_t 
 typedef struct BoardState
 {
     Piece board[8][8];
+    PiecesList pieces;
     Color turn;
     bool white_king_side_castle;
     bool white_queen_side_castle;

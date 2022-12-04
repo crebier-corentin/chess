@@ -2,6 +2,7 @@
 #include "greatest.h"
 #include "move.h"
 #include "perft.h"
+#include "piece.h"
 
 TEST test_perft_default()
 {
@@ -25,6 +26,29 @@ TEST test_perft_kiwipete()
     PASS();
 }
 
+TEST test_piece_list()
+{
+    BoardState bs = load_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
+
+    for (Color c = C_WHITE; c <= C_BLACK; c++)
+    {
+        for (PieceType pt = PT_PAWN; pt <= PT_KING; pt++)
+        {
+            Piece p = create_piece(pt, c);
+
+            int8_t index;
+            int8_t *len;
+            pieces_offset(&bs.pieces, pt, c, &index, &len);
+            for (int8_t i = index; i < index + *len; i++)
+            {
+                ASSERT_EQ(get_piece(&bs, bs.pieces.list[i]), p);
+            }
+        }
+    }
+
+    PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv)
@@ -33,6 +57,8 @@ int main(int argc, char **argv)
 
     RUN_TEST(test_perft_default);
     RUN_TEST(test_perft_kiwipete);
+
+    RUN_TEST(test_piece_list);
 
     GREATEST_MAIN_END();
 }

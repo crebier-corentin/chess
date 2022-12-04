@@ -11,58 +11,123 @@ static int8_t pieces_all_color_len(PiecesListLengths *pll)
     return pll->pawn_len + pll->knight_len + pll->bishop_len + pll->rook_len + pll->queen_len + pll->king_len;
 }
 
-void pieces_offset(PiecesList *pl, PieceType pt, Color c, int8_t *out_index, int8_t *out_len)
+void pieces_offset(PiecesList *pl, PieceType pt, Color c, int8_t *out_index, int8_t **out_len)
 {
+    assert(pl != NULL);
     assert(out_index != NULL);
     assert(out_len != NULL);
 
     int8_t index = c == C_WHITE ? 0 : pieces_all_color_len(&pl->white);
-    PiecesListLengths pll = c == C_WHITE ? pl->white : pl->black;
+    PiecesListLengths *pll = c == C_WHITE ? &pl->white : &pl->black;
 
     if (pt == PT_PAWN)
     {
         *out_index = index;
-        *out_len = pll.pawn_len;
+        *out_len = &pll->pawn_len;
+        return;
     }
-    index += pll.pawn_len;
+    index += pll->pawn_len;
 
     if (pt == PT_KNIGHT)
     {
         *out_index = index;
-        *out_len = pll.knight_len;
+        *out_len = &pll->knight_len;
+        return;
     }
-    index += pll.knight_len;
+    index += pll->knight_len;
 
     if (pt == PT_BISHOP)
     {
         *out_index = index;
-        *out_len = pll.bishop_len;
+        *out_len = &pll->bishop_len;
+        return;
     }
-    index += pll.bishop_len;
+    index += pll->bishop_len;
 
     if (pt == PT_ROOK)
     {
         *out_index = index;
-        *out_len = pll.rook_len;
+        *out_len = &pll->rook_len;
+        return;
     }
-    index += pll.rook_len;
+    index += pll->rook_len;
 
     if (pt == PT_QUEEN)
     {
         *out_index = index;
-        *out_len = pll.queen_len;
+        *out_len = &pll->queen_len;
+        return;
     }
-    index += pll.queen_len;
+    index += pll->queen_len;
 
     if (pt == PT_KING)
     {
         *out_index = index;
-        *out_len = pll.king_len;
+        *out_len = &pll->king_len;
+        return;
     }
 
     assert(false && "Invalid piece type");
 }
-void pieces_all_color_offset(PiecesList *pl, Color c, int8_t *out_index, int8_t *out_len);
+void pieces_all_color_offset(PiecesList *pl, Color c, int8_t *out_index, int8_t *out_len)
+{
+    assert(pl != NULL);
+    assert(out_index != NULL);
+    assert(out_len != NULL);
+
+    if (c == C_WHITE)
+    {
+        *out_index = 0;
+        *out_len = pieces_all_color_len(&pl->white);
+    }
+    else
+    {
+        *out_index = pieces_all_color_len(&pl->white);
+        *out_len = pieces_all_color_len(&pl->black);
+    }
+}
+
+static int8_t pieces_total_len(PiecesList *pl)
+{
+    assert(pl != NULL);
+
+    return pieces_all_color_len(&pl->white) + pieces_all_color_len(&pl->black);
+}
+
+static void pieces_insert(PiecesList *pl, Piece p, Pos pos)
+{
+    assert(pl != NULL);
+    assert(pieces_total_len(pl) < 64);
+
+    int8_t index;
+    int8_t *len;
+    pieces_offset(pl, get_type(p), get_color(p), &index, &len);
+
+    memmove(&pl->list[index + 1], &pl->list[index], (pieces_total_len(pl) - index + 1) * sizeof(Pos));
+
+    pl->list[index] = pos;
+    (*len)++;
+}
+static void pieces_remove(PiecesList *pl, Piece p, Pos pos)
+{
+    assert(pl != NULL);
+    assert(pieces_total_len(pl) > 0);
+
+    int8_t index;
+    int8_t *len;
+    pieces_offset(pl, get_type(p), get_color(p), &index, &len);
+
+    // Find the piece
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        if (pl->list[i].x == pos.x && pl->list[i].y == pos.y)
+        {
+            memmove(&pl->list[i], &pl->list[i + 1], (pieces_total_len(pl) - i - 1) * sizeof(Pos));
+            (*len)--;
+            return;
+        }
+    }
+}
 
 BoardState load_fen(const char *fen)
 {
@@ -72,60 +137,60 @@ BoardState load_fen(const char *fen)
     bs.en_passant_x = NO_EN_PASSANT;
     bs.en_passant_y = NO_EN_PASSANT;
 
-    int x = 0;
-    int y = 0;
+    int8_t x = 0;
+    int8_t y = 0;
 
     while (!(x == 8 && y == 7))
     {
         switch (*fen++)
         {
         case 'p':
-            bs.board[x][y] = create_piece(PT_PAWN, C_BLACK);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_PAWN, C_BLACK));
             x++;
             break;
         case 'n':
-            bs.board[x][y] = create_piece(PT_KNIGHT, C_BLACK);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_KNIGHT, C_BLACK));
             x++;
             break;
         case 'b':
-            bs.board[x][y] = create_piece(PT_BISHOP, C_BLACK);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_BISHOP, C_BLACK));
             x++;
             break;
         case 'r':
-            bs.board[x][y] = create_piece(PT_ROOK, C_BLACK);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_ROOK, C_BLACK));
             x++;
             break;
         case 'q':
-            bs.board[x][y] = create_piece(PT_QUEEN, C_BLACK);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_QUEEN, C_BLACK));
             x++;
             break;
         case 'k':
-            bs.board[x][y] = create_piece(PT_KING, C_BLACK);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_KING, C_BLACK));
             x++;
             break;
 
         case 'P':
-            bs.board[x][y] = create_piece(PT_PAWN, C_WHITE);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_PAWN, C_WHITE));
             x++;
             break;
         case 'N':
-            bs.board[x][y] = create_piece(PT_KNIGHT, C_WHITE);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_KNIGHT, C_WHITE));
             x++;
             break;
         case 'B':
-            bs.board[x][y] = create_piece(PT_BISHOP, C_WHITE);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_BISHOP, C_WHITE));
             x++;
             break;
         case 'R':
-            bs.board[x][y] = create_piece(PT_ROOK, C_WHITE);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_ROOK, C_WHITE));
             x++;
             break;
         case 'Q':
-            bs.board[x][y] = create_piece(PT_QUEEN, C_WHITE);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_QUEEN, C_WHITE));
             x++;
             break;
         case 'K':
-            bs.board[x][y] = create_piece(PT_KING, C_WHITE);
+            set_piece(&bs, (Pos){x, y}, create_piece(PT_KING, C_WHITE));
             x++;
             break;
 
@@ -299,7 +364,17 @@ void set_piece(BoardState *bs, Pos pos, Piece p)
     assert(pos.x >= 0 && pos.x <= 7);
     assert(pos.y >= 0 && pos.y <= 7);
 
+    if (!is_empty(bs->board[pos.x][pos.y]))
+    {
+        pieces_remove(&bs->pieces, bs->board[pos.x][pos.y], pos);
+    }
+
     bs->board[pos.x][pos.y] = p;
+
+    if (!is_empty(p))
+    {
+        pieces_insert(&bs->pieces, p, pos);
+    }
 }
 
 Piece get_piece(BoardState *bs, Pos pos)
@@ -639,16 +714,43 @@ void generate_pseudo_moves(BoardState *bs, Color color, Array(Move) * out_moves)
     assert(bs != NULL);
     assert(out_moves != NULL);
 
-    for (Pos pos = {0, 0}; pos.y < 8; pos.y++)
+    int8_t index;
+    int8_t *len;
+
+    pieces_offset(&bs->pieces, PT_PAWN, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
     {
-        for (pos.x = 0; pos.x < 8; pos.x++)
-        {
-            Piece p = get_piece(bs, pos);
-            if (!is_empty(p) && get_color(p) == color)
-            {
-                generate_piece_pseudo_moves(bs, pos, out_moves);
-            }
-        }
+        generate_pawn_pseudo_moves(bs, bs->pieces.list[i], out_moves);
+    }
+
+    pieces_offset(&bs->pieces, PT_KNIGHT, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_knight_pseudo_moves(bs, bs->pieces.list[i], out_moves);
+    }
+
+    pieces_offset(&bs->pieces, PT_BISHOP, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_bishop_pseudo_moves(bs, bs->pieces.list[i], out_moves);
+    }
+
+    pieces_offset(&bs->pieces, PT_ROOK, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_rook_pseudo_moves(bs, bs->pieces.list[i], out_moves);
+    }
+
+    pieces_offset(&bs->pieces, PT_QUEEN, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_queen_pseudo_moves(bs, bs->pieces.list[i], out_moves);
+    }
+
+    pieces_offset(&bs->pieces, PT_KING, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_king_pseudo_moves(bs, bs->pieces.list[i], out_moves);
     }
 }
 
@@ -983,16 +1085,42 @@ void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8])
 
     memset(out_map, 0, sizeof(bool) * 8 * 8);
 
-    for (int8_t x = 0; x < 8; x++)
+    int8_t index;
+    int8_t *len;
+
+    pieces_offset(&bs->pieces, PT_PAWN, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
     {
-        for (int8_t y = 0; y < 8; y++)
-        {
-            Pos pos = (Pos){x, y};
-            Piece piece = get_piece(bs, pos);
-            if (get_color(piece) == color)
-            {
-                generate_piece_attack_map(bs, pos, out_map);
-            }
-        }
+        generate_pawn_attack_map(bs, bs->pieces.list[i], out_map);
+    }
+
+    pieces_offset(&bs->pieces, PT_KNIGHT, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_knight_attack_map(bs->pieces.list[i], out_map);
+    }
+
+    pieces_offset(&bs->pieces, PT_BISHOP, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_bishop_attack_map(bs, bs->pieces.list[i], out_map);
+    }
+
+    pieces_offset(&bs->pieces, PT_ROOK, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_rook_attack_map(bs, bs->pieces.list[i], out_map);
+    }
+
+    pieces_offset(&bs->pieces, PT_QUEEN, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_queen_attack_map(bs, bs->pieces.list[i], out_map);
+    }
+
+    pieces_offset(&bs->pieces, PT_KING, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_king_attack_map(bs->pieces.list[i], out_map);
     }
 }
