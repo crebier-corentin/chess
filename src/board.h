@@ -72,6 +72,9 @@ void generate_legal_moves(BoardState *bs, Color color, Array(Move) * out_moves);
 
 void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8]);
 
+double evaluate(BoardState *bs);
+Move search_move(BoardState *bs, int depth);
+
 #ifdef __cplusplus
 }
 #endif

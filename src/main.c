@@ -12,7 +12,6 @@
 #include <string.h>
 #include <windows.h>
 
-
 typedef intptr_t ssize_t;
 
 ssize_t getline(char **lineptr, size_t *n, FILE *stream)
@@ -80,16 +79,19 @@ int main(int argc, char *argv[])
     (void)argc;
     (void)argv;
 
-    int depth = 1;
-    if (argc >= 2)
+    SetConsoleOutputCP(65001); // unicode
+
+    char *fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    if (argc > 1)
     {
-        depth = atoi(argv[1]);
+        fen = argv[1];
     }
 
-    BoardState bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    perft_thread_sched(&bs, depth);
+    BoardState bs = load_fen(fen);
 
-    // SetConsoleOutputCP(65001); // unicode
+    char buffer[6] = {0};
+    move_to_long_notation(search_move(&bs, 5), buffer);
+    printf("%s", buffer);
 
     // BoardState bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     // print_board(&bs);

@@ -1,7 +1,12 @@
 #include "board.h"
+#include "array.h"
+#include "move.h"
 #include "piece.h"
 #include "zobrist.h"
 #include <assert.h>
+#include <limits.h>
+#include <math.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1142,4 +1147,209 @@ void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8])
     {
         generate_king_attack_map(bs->pieces.list[i], out_map);
     }
+}
+
+static int count_doubled_and_isolated_pawns(BoardState *bs, Color c)
+{
+    assert(bs != NULL);
+
+    int8_t index;
+    int8_t *len;
+    pieces_offset(&bs->pieces, PT_PAWN, c, &index, &len);
+
+    int pawns_on_file[8] = {0};
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        pawns_on_file[bs->pieces.list[i].x]++;
+    }
+
+    int doubled_pawns = 0;
+    for (int8_t i = 0; i < 8; i++)
+    {
+        if (pawns_on_file[i] > 1)
+        {
+            doubled_pawns += pawns_on_file[i] - 1;
+        }
+    }
+
+    int isolated_pawns = 0;
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        Pos pos = bs->pieces.list[i];
+
+        bool left = pos.x == 0 || pawns_on_file[pos.x - 1] == 0;
+        bool right = pos.x == 7 || pawns_on_file[pos.x + 1] == 0;
+        if (left || right)
+        {
+            isolated_pawns++;
+        }
+    }
+
+    return doubled_pawns + isolated_pawns;
+}
+static int count_blocked_pawns(BoardState *bs, Color c)
+{
+    assert(bs != NULL);
+
+    int direction = c == C_WHITE ? -1 : 1;
+
+    int8_t index;
+    int8_t *len;
+    pieces_offset(&bs->pieces, PT_PAWN, c, &index, &len);
+
+    int blocked_pawns = 0;
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        Pos pos = bs->pieces.list[i];
+        Pos forward = (Pos){pos.x, pos.y + direction};
+        if (!is_empty(get_piece(bs, forward)))
+        {
+            blocked_pawns++;
+        }
+    }
+
+    return blocked_pawns;
+}
+
+double evaluate(BoardState *bs)
+{
+    assert(bs != NULL);
+
+    double score = 0;
+
+    // material
+    score += bs->pieces.white.king_len * 200;
+    score += bs->pieces.black.king_len * -200;
+    score += bs->pieces.white.queen_len * 9;
+    score += bs->pieces.black.queen_len * -9;
+    score += bs->pieces.white.rook_len * 5;
+    score += bs->pieces.black.rook_len * -5;
+    score += bs->pieces.white.bishop_len * 3;
+    score += bs->pieces.black.bishop_len * -3;
+    score += bs->pieces.white.knight_len * 3;
+    score += bs->pieces.black.knight_len * -3;
+    score += bs->pieces.white.pawn_len * 1;
+    score += bs->pieces.black.pawn_len * -1;
+
+    // pawn structure
+    score += ((double)count_doubled_and_isolated_pawns(bs, C_WHITE)) * -0.5;
+    score += ((double)count_doubled_and_isolated_pawns(bs, C_BLACK)) * 0.5;
+    score += ((double)count_blocked_pawns(bs, C_WHITE)) * -0.5;
+    score += ((double)count_blocked_pawns(bs, C_BLACK)) * 0.5;
+
+    // mobility
+    Array(Move) white_moves = array_create_size(Move, 32);
+    generate_legal_moves(bs, C_WHITE, &white_moves);
+    Array(Move) black_moves = array_create_size(Move, 32);
+    generate_legal_moves(bs, C_BLACK, &black_moves);
+
+    score += ((double)array_len(white_moves)) * 0.1;
+    score += ((double)array_len(black_moves)) * -0.1;
+
+    array_free(white_moves);
+    array_free(black_moves);
+
+    return score;
+}
+
+// forward declaration
+static double alpha_beta_max(BoardState *bs, double alpha, double beta, int depth, Move *out_move);
+static double alpha_beta_min(BoardState *bs, double alpha, double beta, int depth, Move *out_move);
+
+static double alpha_beta_max(BoardState *bs, double alpha, double beta, int depth, Move *out_move)
+{
+    if (depth == 0)
+    {
+        return evaluate(bs);
+    }
+
+    Array(Move) moves = array_create_size(Move, 32);
+    generate_legal_moves(bs, bs->turn, &moves);
+
+    if (array_len(moves) == 0)
+    {
+        array_free(moves);
+        return -1000000; // checkmate or draw
+    }
+
+    Move best_move = {0};
+    for (size_t i = 0; i < array_len(moves); i++)
+    {
+        BoardState new_bs = *bs;
+        make_move(&new_bs, moves[i]);
+
+        double score = alpha_beta_min(&new_bs, alpha, beta, depth - 1, NULL);
+        if (score >= beta)
+        {
+            array_free(moves);
+            return beta; // fail hard beta-cutoff
+        }
+        if (score > alpha)
+        {
+            alpha = score; // alpha acts like max in MiniMax
+            best_move = moves[i];
+        }
+    }
+
+    array_free(moves);
+    if (out_move != NULL)
+    {
+        *out_move = best_move;
+    }
+    return alpha;
+}
+
+static double alpha_beta_min(BoardState *bs, double alpha, double beta, int depth, Move *out_move)
+{
+    if (depth == 0)
+    {
+        return -evaluate(bs); // remove - ?
+    }
+
+    Array(Move) moves = array_create_size(Move, 32);
+    generate_legal_moves(bs, bs->turn, &moves);
+
+    if (array_len(moves) == 0)
+    {
+        array_free(moves);
+        return 1000000; // checkmate or draw
+    }
+
+    Move best_move = {0};
+    for (size_t i = 0; i < array_len(moves); i++)
+    {
+        BoardState new_bs = *bs;
+        make_move(&new_bs, moves[i]);
+
+        double score = alpha_beta_max(&new_bs, alpha, beta, depth - 1, NULL);
+        if (score <= alpha)
+        {
+            array_free(moves);
+            return alpha; // fail hard alpha-cutoff
+        }
+        if (score < beta)
+        {
+            beta = score; // beta acts like min in MiniMax
+            best_move = moves[i];
+        }
+    }
+
+    array_free(moves);
+    if (out_move != NULL)
+    {
+        *out_move = best_move;
+    }
+    return beta;
+}
+
+Move search_move(BoardState *bs, int depth)
+{
+    assert(bs != NULL);
+    assert(depth > 0);
+
+    Move best_move = {0};
+
+    alpha_beta_max(bs, INT_MIN, INT_MAX, depth, &best_move);
+
+    return best_move;
 }
