@@ -1,7 +1,9 @@
 #include "array.h"
 #include "board.h"
+#include "move.h"
 #include "perft.h"
 #include "piece.h"
+#include "zobrist.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -9,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
+
 
 typedef intptr_t ssize_t;
 
@@ -72,27 +75,38 @@ ssize_t getline(char **lineptr, size_t *n, FILE *stream)
 
 int main(int argc, char *argv[])
 {
+    zobrist_init();
+
     (void)argc;
     (void)argv;
 
-    SetConsoleOutputCP(65001); // unicode
+    int depth = 1;
+    if (argc >= 2)
+    {
+        depth = atoi(argv[1]);
+    }
 
     BoardState bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    print_board(&bs);
+    perft_thread_sched(&bs, depth);
 
-    while (true)
-    {
-        char buffer[256] = {0};
-        scanf("%255s", buffer);
+    // SetConsoleOutputCP(65001); // unicode
 
-        if (strcmp(buffer, "q") == 0 || strcmp(buffer, "quit") == 0 || strcmp(buffer, "exit") == 0)
-        {
-            break;
-        }
+    // BoardState bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    // print_board(&bs);
 
-        make_move(&bs, parse_algebraic_notation(&bs, buffer));
-        print_board(&bs);
-    }
+    // while (true)
+    //{
+    //     char buffer[256] = {0};
+    //     scanf("%255s", buffer);
+
+    //    if (strcmp(buffer, "q") == 0 || strcmp(buffer, "quit") == 0 || strcmp(buffer, "exit") == 0)
+    //    {
+    //        break;
+    //    }
+
+    //    make_move(&bs, parse_algebraic_notation(&bs, buffer));
+    //    print_board(&bs);
+    //}
 
     // printf("%llu\n", perft_thread_sched(&bs, depth));
 

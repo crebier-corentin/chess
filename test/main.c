@@ -3,6 +3,7 @@
 #include "move.h"
 #include "perft.h"
 #include "piece.h"
+#include "zobrist.h"
 
 TEST test_perft_default()
 {
@@ -49,16 +50,62 @@ TEST test_piece_list()
     PASS();
 }
 
+TEST test_zobrist_hash()
+{
+    {
+        BoardState bs1 = load_fen("k7/8/8/8/8/8/8/K7 w - - 0 1");
+        make_move(&bs1, parse_algebraic_notation(&bs1, "Ka2"));
+
+        BoardState bs2 = load_fen("k7/8/8/8/8/8/K7/8 b - - 0 1");
+
+        ASSERT_EQ(bs1.zobrist_hash, bs2.zobrist_hash);
+    }
+
+    // Castle
+    {
+        BoardState bs1 = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+        make_move(&bs1, parse_algebraic_notation(&bs1, "O-O"));
+
+        BoardState bs2 = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R4RK1 b kq - 1 1");
+
+        ASSERT_EQ(bs1.zobrist_hash, bs2.zobrist_hash);
+    }
+    {
+        BoardState bs1 = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+        make_move(&bs1, parse_algebraic_notation(&bs1, "O-O-O"));
+
+        BoardState bs2 = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/2KR3R b kq - 1 1");
+
+        ASSERT_EQ(bs1.zobrist_hash, bs2.zobrist_hash);
+    }
+
+    // En passant
+    {
+        BoardState bs1 = load_fen("rnbqkbnr/pp1ppppp/8/8/3p4/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        make_move(&bs1, parse_algebraic_notation(&bs1, "e4"));
+
+        BoardState bs2 = load_fen("rnbqkbnr/pp1ppppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1");
+
+        ASSERT_EQ(bs1.zobrist_hash, bs2.zobrist_hash);
+    }
+
+    PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv)
 {
+    zobrist_init();
+
     GREATEST_MAIN_BEGIN();
 
     RUN_TEST(test_perft_default);
     RUN_TEST(test_perft_kiwipete);
 
     RUN_TEST(test_piece_list);
+
+    RUN_TEST(test_zobrist_hash);
 
     GREATEST_MAIN_END();
 }

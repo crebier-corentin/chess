@@ -33,6 +33,7 @@ void pieces_all_color_offset(PiecesList *pl, Color c, int8_t *out_index, int8_t 
 
 typedef struct BoardState
 {
+    uint64_t zobrist_hash;
     Piece board[8][8];
     PiecesList pieces;
     Color turn;
@@ -52,6 +53,7 @@ void print_attack_map(bool out_map[8][8]);
 
 void set_piece(BoardState *bs, Pos pos, Piece p);
 Piece get_piece(BoardState *bs, Pos pos);
+void update_castle_right(BoardState *bs, Color c, bool king_side, bool value);
 
 void make_move(BoardState *bs, Move move);
 

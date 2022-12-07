@@ -1,5 +1,6 @@
 #include "board.h"
 #include "piece.h"
+#include "zobrist.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -228,6 +229,10 @@ BoardState load_fen(const char *fen)
 
     fen++; // space
     bs.turn = *fen++ == 'w' ? C_WHITE : C_BLACK;
+    if (bs.turn == C_BLACK)
+    {
+        bs.zobrist_hash ^= zobrist_black();
+    }
     fen++; // space
 
     while (*fen != ' ')
@@ -235,16 +240,16 @@ BoardState load_fen(const char *fen)
         switch (*fen++)
         {
         case 'K':
-            bs.white_king_side_castle = true;
+            update_castle_right(&bs, C_WHITE, true, true);
             break;
         case 'Q':
-            bs.white_queen_side_castle = true;
+            update_castle_right(&bs, C_WHITE, false, true);
             break;
         case 'k':
-            bs.black_king_side_castle = true;
+            update_castle_right(&bs, C_BLACK, true, true);
             break;
         case 'q':
-            bs.black_queen_side_castle = true;
+            update_castle_right(&bs, C_BLACK, false, true);
             break;
         }
     }
@@ -254,6 +259,7 @@ BoardState load_fen(const char *fen)
     {
         bs.en_passant_x = *fen++ - 'a';       // file
         bs.en_passant_y = 7 - (*fen++ - '1'); // rank
+        bs.zobrist_hash ^= zobrist_en_passant(bs.en_passant_y);
     }
     fen++; // space
 
@@ -367,6 +373,7 @@ void set_piece(BoardState *bs, Pos pos, Piece p)
     if (!is_empty(bs->board[pos.x][pos.y]))
     {
         pieces_remove(&bs->pieces, bs->board[pos.x][pos.y], pos);
+        bs->zobrist_hash ^= zobrist_piece(bs->board[pos.x][pos.y], pos);
     }
 
     bs->board[pos.x][pos.y] = p;
@@ -374,6 +381,7 @@ void set_piece(BoardState *bs, Pos pos, Piece p)
     if (!is_empty(p))
     {
         pieces_insert(&bs->pieces, p, pos);
+        bs->zobrist_hash ^= zobrist_piece(bs->board[pos.x][pos.y], pos);
     }
 }
 
@@ -386,6 +394,42 @@ Piece get_piece(BoardState *bs, Pos pos)
     return bs->board[pos.x][pos.y];
 }
 
+void update_castle_right(BoardState *bs, Color c, bool king_side, bool value)
+{
+    assert(bs != NULL);
+
+    bool *castle_right;
+
+    if (c == C_WHITE)
+    {
+        if (king_side)
+        {
+            castle_right = &bs->white_king_side_castle;
+        }
+        else
+        {
+            castle_right = &bs->white_queen_side_castle;
+        }
+    }
+    else
+    {
+        if (king_side)
+        {
+            castle_right = &bs->black_king_side_castle;
+        }
+        else
+        {
+            castle_right = &bs->black_queen_side_castle;
+        }
+    }
+
+    if (*castle_right != value)
+    {
+        bs->zobrist_hash ^= zobrist_castle_right(c, king_side);
+        *castle_right = value;
+    }
+}
+
 void make_move(BoardState *bs, Move move)
 {
     assert(bs != NULL);
@@ -396,6 +440,10 @@ void make_move(BoardState *bs, Move move)
     bool capture = false;
 
     // Reset en passant
+    if (bs->en_passant_y != NO_EN_PASSANT)
+    {
+        bs->zobrist_hash ^= zobrist_en_passant(bs->en_passant_y);
+    }
     bs->en_passant_x = NO_EN_PASSANT;
     bs->en_passant_y = NO_EN_PASSANT;
 
@@ -459,11 +507,13 @@ void make_move(BoardState *bs, Move move)
         {
             bs->en_passant_x = move.to.x;
             bs->en_passant_y = move.to.y + (get_color(p) == C_WHITE ? 1 : -1);
+            bs->zobrist_hash ^= zobrist_en_passant(bs->en_passant_y);
         }
     }
 
     // Update turn
     bs->turn = get_color(p) == C_WHITE ? C_BLACK : C_WHITE;
+    bs->zobrist_hash ^= zobrist_black();
 
     // Update fullmove clock
     if (bs->turn == C_WHITE)
@@ -484,40 +534,18 @@ void make_move(BoardState *bs, Move move)
     // Update castling rights
     if (is_king(p))
     {
-        if (get_color(p) == C_WHITE)
-        {
-            bs->white_king_side_castle = false;
-            bs->white_queen_side_castle = false;
-        }
-        else
-        {
-            bs->black_king_side_castle = false;
-            bs->black_queen_side_castle = false;
-        }
+        update_castle_right(bs, get_color(p), true, false);
+        update_castle_right(bs, get_color(p), false, false);
     }
     else if (is_rook(p))
     {
-        if (get_color(p) == C_WHITE)
+        if (move.from.x == 7)
         {
-            if (move.from.x == 0)
-            {
-                bs->white_queen_side_castle = false;
-            }
-            else if (move.from.x == 7)
-            {
-                bs->white_king_side_castle = false;
-            }
+            update_castle_right(bs, get_color(p), true, false);
         }
-        else
+        else if (move.from.x == 0)
         {
-            if (move.from.x == 0)
-            {
-                bs->black_queen_side_castle = false;
-            }
-            else if (move.from.x == 7)
-            {
-                bs->black_king_side_castle = false;
-            }
+            update_castle_right(bs, get_color(p), false, false);
         }
     }
 
@@ -526,19 +554,19 @@ void make_move(BoardState *bs, Move move)
     {
         if (move.to.x == 0 && move.to.y == 7)
         {
-            bs->white_queen_side_castle = false;
+            update_castle_right(bs, C_WHITE, false, false);
         }
         else if (move.to.x == 7 && move.to.y == 7)
         {
-            bs->white_king_side_castle = false;
+            update_castle_right(bs, C_WHITE, true, false);
         }
         else if (move.to.x == 0 && move.to.y == 0)
         {
-            bs->black_queen_side_castle = false;
+            update_castle_right(bs, C_BLACK, false, false);
         }
         else if (move.to.x == 7 && move.to.y == 0)
         {
-            bs->black_king_side_castle = false;
+            update_castle_right(bs, C_BLACK, true, false);
         }
     }
 }
@@ -548,24 +576,15 @@ bool is_in_check(BoardState *bs, Color color)
     assert(bs != NULL);
 
     // Find king
-    Pos king_pos = {-1, -1};
-    for (int8_t x = 0; x < 8; x++)
-    {
-        for (int8_t y = 0; y < 8; y++)
-        {
-            Piece p = get_piece(bs, (Pos){x, y});
-            if (is_king(p) && get_color(p) == color)
-            {
-                king_pos = (Pos){x, y};
-                break;
-            }
-        }
-    }
+    int8_t king_index;
+    int8_t *king_len;
+    pieces_offset(&bs->pieces, PT_KING, color, &king_index, &king_len);
     // No king found
-    if (king_pos.x == -1)
+    if (*king_len == 0)
     {
         return false;
     }
+    Pos king_pos = bs->pieces.list[king_index];
 
     // Check if any piece can attack the king
     bool attack_map[8][8];
