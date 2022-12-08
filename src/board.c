@@ -4,6 +4,7 @@
 #include "piece.h"
 #include "zobrist.h"
 #include <assert.h>
+#include <float.h>
 #include <limits.h>
 #include <math.h>
 #include <stddef.h>
@@ -1211,8 +1212,12 @@ static int count_blocked_pawns(BoardState *bs, Color c)
     return blocked_pawns;
 }
 
+uint64_t count = 0;
+
 double evaluate(BoardState *bs)
 {
+    count++;
+
     assert(bs != NULL);
 
     double score = 0;
@@ -1249,97 +1254,67 @@ double evaluate(BoardState *bs)
     array_free(white_moves);
     array_free(black_moves);
 
+    // TODO: piece square tables
+
     return score;
 }
 
-// forward declaration
-static double alpha_beta_max(BoardState *bs, double alpha, double beta, int depth, Move *out_move);
-static double alpha_beta_min(BoardState *bs, double alpha, double beta, int depth, Move *out_move);
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
-static double alpha_beta_max(BoardState *bs, double alpha, double beta, int depth, Move *out_move)
+#define MATE_VALUE -999999
+#define DRAW_VALUE 0
+
+static double negamax(BoardState *bs, int depth, double alpha, double beta, Color c, Move *out_move)
 {
     if (depth == 0)
     {
-        return evaluate(bs);
+        return evaluate(bs) * (c == C_WHITE ? 1 : -1);
     }
 
     Array(Move) moves = array_create_size(Move, 32);
     generate_legal_moves(bs, bs->turn, &moves);
 
+    // Checkmate and stalemate detection
     if (array_len(moves) == 0)
     {
         array_free(moves);
-        return -1000000; // checkmate or draw
+
+        if (is_in_check(bs, c))
+        {
+            return MATE_VALUE;
+        }
+        else
+        {
+            return DRAW_VALUE;
+        }
     }
 
-    Move best_move = {0};
+    double value = -INFINITY;
     for (size_t i = 0; i < array_len(moves); i++)
     {
         BoardState new_bs = *bs;
         make_move(&new_bs, moves[i]);
 
-        double score = alpha_beta_min(&new_bs, alpha, beta, depth - 1, NULL);
-        if (score >= beta)
+        double score = -negamax(&new_bs, depth - 1, -beta, -alpha, c == C_WHITE ? C_BLACK : C_WHITE, NULL);
+        if (score > value)
         {
-            array_free(moves);
-            return beta; // fail hard beta-cutoff
+            value = score;
+            if (out_move != NULL)
+            {
+                *out_move = moves[i];
+            }
         }
-        if (score > alpha)
+        alpha = MAX(alpha, value);
+        if (alpha >= beta)
         {
-            alpha = score; // alpha acts like max in MiniMax
-            best_move = moves[i];
-        }
-    }
-
-    array_free(moves);
-    if (out_move != NULL)
-    {
-        *out_move = best_move;
-    }
-    return alpha;
-}
-
-static double alpha_beta_min(BoardState *bs, double alpha, double beta, int depth, Move *out_move)
-{
-    if (depth == 0)
-    {
-        return -evaluate(bs); // remove - ?
-    }
-
-    Array(Move) moves = array_create_size(Move, 32);
-    generate_legal_moves(bs, bs->turn, &moves);
-
-    if (array_len(moves) == 0)
-    {
-        array_free(moves);
-        return 1000000; // checkmate or draw
-    }
-
-    Move best_move = {0};
-    for (size_t i = 0; i < array_len(moves); i++)
-    {
-        BoardState new_bs = *bs;
-        make_move(&new_bs, moves[i]);
-
-        double score = alpha_beta_max(&new_bs, alpha, beta, depth - 1, NULL);
-        if (score <= alpha)
-        {
-            array_free(moves);
-            return alpha; // fail hard alpha-cutoff
-        }
-        if (score < beta)
-        {
-            beta = score; // beta acts like min in MiniMax
-            best_move = moves[i];
+            break;
         }
     }
 
     array_free(moves);
-    if (out_move != NULL)
-    {
-        *out_move = best_move;
-    }
-    return beta;
+
+    return value;
 }
 
 Move search_move(BoardState *bs, int depth)
@@ -1348,8 +1323,7 @@ Move search_move(BoardState *bs, int depth)
     assert(depth > 0);
 
     Move best_move = {0};
-
-    alpha_beta_max(bs, INT_MIN, INT_MAX, depth, &best_move);
+    negamax(bs, depth, -INFINITY, INFINITY, bs->turn, &best_move);
 
     return best_move;
 }

@@ -91,7 +91,10 @@ int main(int argc, char *argv[])
 
     char buffer[6] = {0};
     move_to_long_notation(search_move(&bs, 5), buffer);
-    printf("%s", buffer);
+    printf("%s\n", buffer);
+
+    // TODO: find checkmate with
+    // 8/8/8/7R/4Q3/6k1/3R4/K7 w - - 13 9
 
     // BoardState bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     // print_board(&bs);

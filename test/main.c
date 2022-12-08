@@ -92,6 +92,45 @@ TEST test_zobrist_hash()
     PASS();
 }
 
+TEST test_mate_in_one()
+{
+    {
+        BoardState bs = load_fen("8/8/8/7R/4Q3/6k1/3R4/K7 w - - 13 9");
+        char buffer[6] = {0};
+        move_to_long_notation(search_move(&bs, 3), buffer);
+
+        ASSERT_STR_EQ(buffer, "d2g2");
+    }
+
+    {
+        BoardState bs = load_fen("k6r/8/8/8/8/8/PPP5/K7 b - - 0 1");
+        char buffer[6] = {0};
+        move_to_long_notation(search_move(&bs, 3), buffer);
+
+        ASSERT_STR_EQ(buffer, "h8h1");
+    }
+
+    PASS();
+}
+
+TEST test_mate_in_two()
+{
+    {
+        BoardState bs = load_fen("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1");
+        char buffer[6] = {0};
+        move_to_long_notation(search_move(&bs, 5), buffer);
+        ASSERT_STR_EQ(buffer, "a1a6");
+
+        make_move(&bs, parse_algebraic_notation(&bs, "Ra6"));
+        make_move(&bs, parse_algebraic_notation(&bs, "bxa6"));
+
+        move_to_long_notation(search_move(&bs, 5), buffer);
+        ASSERT_STR_EQ(buffer, "b6b7");
+    }
+
+    PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv)
@@ -106,6 +145,9 @@ int main(int argc, char **argv)
     RUN_TEST(test_piece_list);
 
     RUN_TEST(test_zobrist_hash);
+
+    RUN_TEST(test_mate_in_one);
+    RUN_TEST(test_mate_in_two);
 
     GREATEST_MAIN_END();
 }
