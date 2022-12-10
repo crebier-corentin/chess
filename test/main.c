@@ -159,6 +159,7 @@ GREATEST_MAIN_DEFS();
 int main(int argc, char **argv)
 {
     zobrist_init();
+    cache_init();
 
     GREATEST_MAIN_BEGIN();
 

@@ -75,6 +75,9 @@ void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8]);
 double evaluate(BoardState *bs);
 Move search_move(BoardState *bs, int depth);
 
+void cache_init();
+void cache_free();
+
 #ifdef __cplusplus
 }
 #endif

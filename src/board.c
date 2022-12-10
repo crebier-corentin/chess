@@ -3,6 +3,8 @@
 #include "move.h"
 #include "piece.h"
 #include "zobrist.h"
+#include <SDL.h>
+#include <SDL_mutex.h>
 #include <assert.h>
 #include <float.h>
 #include <limits.h>
@@ -12,6 +14,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+typedef struct AttackMapHM
+{
+    uint64_t key;
+    bool value[8][8];
+} AttackMapHM;
+
+SDL_mutex *cache_mutex;
+AttackMapHM *cache_white_attack_map = NULL;
+AttackMapHM *cache_black_attack_map = NULL;
+
+void cache_init()
+{
+    cache_mutex = SDL_CreateMutex();
+}
+void cache_free()
+{
+    SDL_DestroyMutex(cache_mutex);
+    hmfree(cache_white_attack_map);
+    hmfree(cache_black_attack_map);
+}
 
 static int8_t pieces_all_color_len(PiecesListLengths *pll)
 {
@@ -1103,7 +1126,7 @@ static void generate_piece_attack_map(BoardState *bs, Pos pos, bool out_map[8][8
     }
 }
 
-void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8])
+static void generate_attack_map_(BoardState *bs, Color color, bool out_map[8][8])
 {
     assert(bs != NULL);
     assert(out_map != NULL);
@@ -1148,6 +1171,34 @@ void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8])
     {
         generate_king_attack_map(bs->pieces.list[i], out_map);
     }
+}
+
+void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8])
+{
+    assert(bs != NULL);
+    assert(out_map != NULL);
+
+    SDL_LockMutex(cache_mutex);
+    AttackMapHM **hash_map = color == C_WHITE ? &cache_white_attack_map : &cache_black_attack_map;
+
+    // Check cache
+    AttackMapHM *cache_value = hmgetp_null(*hash_map, bs->zobrist_hash);
+    if (cache_value != NULL)
+    {
+        memcpy(out_map, cache_value->value, sizeof(bool) * 8 * 8);
+        SDL_UnlockMutex(cache_mutex);
+        return;
+    }
+    SDL_UnlockMutex(cache_mutex);
+
+    generate_attack_map_(bs, color, out_map);
+
+    // Fill cache
+    SDL_LockMutex(cache_mutex);
+    AttackMapHM entry = {bs->zobrist_hash, {0}};
+    memcpy(entry.value, out_map, sizeof(bool) * 8 * 8);
+    hmputs(*hash_map, entry);
+    SDL_UnlockMutex(cache_mutex);
 }
 
 static int count_doubled_and_isolated_pawns(BoardState *bs, Color c)

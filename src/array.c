@@ -1,7 +1,8 @@
 #include "array.h"
 #include <string.h>
 
-bool debug = false;
+#define STB_DS_IMPLEMENTATION
+#include <stb_ds.h>
 
 void *array_create_size_func(size_t elSize, size_t cap)
 {
