@@ -153,7 +153,14 @@ int main(int argc, char *argv[])
 
     SetConsoleOutputCP(65001); // unicode
 
-    main_search(argc, argv);
+    BoardState bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    Move m = search_move(&bs, 7);
+    make_move(&bs, m);
+    char buffer[6];
+    move_to_long_notation(m, buffer);
+    printf("%s\n", buffer);
+
+    // main_search(argc, argv);
 
     return 0;
 }
