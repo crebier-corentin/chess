@@ -14,26 +14,53 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <windows.h>
 
-typedef struct AttackMapHM
+typedef struct AttackMapCacheEntry
 {
     uint64_t key;
-    bool value[8][8];
-} AttackMapHM;
+    AttackMap value;
+} AttackMapCacheEntry;
+typedef struct AttackMapCache
+{
+    SRWLOCK lock;
+    size_t index;
+    AttackMapCacheEntry entries[10];
+} AttackMapCache;
 
-SDL_mutex *cache_mutex;
-AttackMapHM *cache_white_attack_map = NULL;
-AttackMapHM *cache_black_attack_map = NULL;
+static void attack_map_cache_add(AttackMapCache *cache, AttackMapCacheEntry entry)
+{
+    assert(cache != NULL);
+
+    AcquireSRWLockExclusive(&cache->lock);
+    cache->entries[cache->index] = entry;
+    cache->index = (cache->index + 1) % 10;
+    ReleaseSRWLockExclusive(&cache->lock);
+}
+static AttackMapCacheEntry *attack_map_cache_find(AttackMapCache *cache, uint64_t key)
+{
+    assert(cache != NULL);
+
+    AcquireSRWLockShared(&cache->lock);
+    for (size_t i = 0; i < 10; i++)
+    {
+        if (cache->entries[i].key == key)
+        {
+            ReleaseSRWLockShared(&cache->lock);
+            return &cache->entries[i];
+        }
+    }
+    ReleaseSRWLockShared(&cache->lock);
+    return NULL;
+}
+static AttackMapCache cache_white_attack_map = {.lock = SRWLOCK_INIT};
+static AttackMapCache cache_black_attack_map = {.lock = SRWLOCK_INIT};
 
 void cache_init()
 {
-    cache_mutex = SDL_CreateMutex();
 }
 void cache_free()
 {
-    SDL_DestroyMutex(cache_mutex);
-    hmfree(cache_white_attack_map);
-    hmfree(cache_black_attack_map);
 }
 
 static int8_t pieces_all_color_len(PiecesListLengths *pll)
@@ -1121,7 +1148,7 @@ static AttackMap generate_piece_attack_map(BoardState *bs, Pos pos)
     }
 }
 
-AttackMap generate_attack_map(BoardState *bs, Color color)
+static AttackMap generate_attack_map_(BoardState *bs, Color color)
 {
     assert(bs != NULL);
 
@@ -1164,6 +1191,22 @@ AttackMap generate_attack_map(BoardState *bs, Color color)
     {
         map |= generate_king_attack_map(bs->pieces.list[i]);
     }
+    return map;
+}
+
+AttackMap generate_attack_map(BoardState *bs, Color color)
+{
+    assert(bs != NULL);
+
+    AttackMapCache *cache = color == C_WHITE ? &cache_white_attack_map : &cache_black_attack_map;
+    AttackMapCacheEntry *entry = attack_map_cache_find(cache, bs->zobrist_hash);
+    if (entry != NULL)
+    {
+        return entry->value;
+    }
+
+    AttackMap map = generate_attack_map_(bs, color);
+    attack_map_cache_add(cache, (AttackMapCacheEntry){bs->zobrist_hash, map});
     return map;
 }
 
