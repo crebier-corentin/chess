@@ -263,11 +263,13 @@ static AlgebraicNotation parse_algebraic_notation_AN(char *buffer)
         // if group exists, capture is true
         an.capture = pcre2_substring_length_byname(match_data, (PCRE2_SPTR) "captures", NULL) == 0;
 
-        assert(pcre2_substring_copy_byname(match_data, (PCRE2_SPTR) "file2", match_buffer, &buffer_size) == 0);
+        match_res = pcre2_substring_copy_byname(match_data, (PCRE2_SPTR) "file2", match_buffer, &buffer_size);
+        assert(match_res == 0);
         an.to.x = match_buffer[0] - 'a';
         buffer_size = sizeof(match_buffer);
 
-        assert(pcre2_substring_copy_byname(match_data, (PCRE2_SPTR) "rank2", match_buffer, &buffer_size) == 0);
+        match_res = pcre2_substring_copy_byname(match_data, (PCRE2_SPTR) "rank2", match_buffer, &buffer_size);
+        assert(match_res == 0);
         an.to.y = 7 - (match_buffer[0] - '1');
         buffer_size = sizeof(match_buffer);
 

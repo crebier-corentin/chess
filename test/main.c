@@ -27,6 +27,17 @@ TEST test_perft_kiwipete()
     PASS();
 }
 
+TEST test_perft_6()
+{
+    BoardState bs = load_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10");
+    ASSERT_EQ(perft_thread_sched(&bs, 1), 46);
+    ASSERT_EQ(perft_thread_sched(&bs, 2), 2079);
+    ASSERT_EQ(perft_thread_sched(&bs, 3), 89890);
+    ASSERT_EQ(perft_thread_sched(&bs, 4), 3894594);
+
+    PASS();
+}
+
 TEST test_piece_list()
 {
     BoardState bs = load_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
@@ -92,6 +103,18 @@ TEST test_zobrist_hash()
     PASS();
 }
 
+TEST test_is_in_check()
+{
+    BoardState bs = load_fen("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1");
+    make_move(&bs, parse_algebraic_notation(&bs, "Ra6"));
+    make_move(&bs, parse_algebraic_notation(&bs, "bxa6"));
+    make_move(&bs, parse_algebraic_notation(&bs, "b7#"));
+
+    ASSERT_EQ(is_in_check(&bs, C_BLACK), true);
+
+    PASS();
+}
+
 TEST test_mate_in_one()
 {
     {
@@ -141,10 +164,13 @@ int main(int argc, char **argv)
 
     RUN_TEST(test_perft_default);
     RUN_TEST(test_perft_kiwipete);
+    RUN_TEST(test_perft_6);
 
     RUN_TEST(test_piece_list);
 
     RUN_TEST(test_zobrist_hash);
+
+    RUN_TEST(test_is_in_check);
 
     RUN_TEST(test_mate_in_one);
     RUN_TEST(test_mate_in_two);
