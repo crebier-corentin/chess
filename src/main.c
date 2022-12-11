@@ -83,19 +83,19 @@ int main(int argc, char *argv[])
     SetConsoleOutputCP(65001); // unicode
 
     char *fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    if (argc > 1)
-    {
-        fen = argv[1];
-    }
+    // if (argc > 1)
+    // {
+    //     fen = argv[1];
+    // }
 
     int depth = 5;
-    if (argc > 2)
+    if (argc > 1)
     {
-        depth = atoi(argv[2]);
+        depth = atoi(argv[1]);
     }
 
     bool threads = false;
-    if (argc > 3)
+    if (argc > 2)
     {
         threads = true;
     }

@@ -29,6 +29,10 @@ typedef struct PiecesList
 void pieces_offset(PiecesList *pl, PieceType pt, Color c, int8_t *out_index, int8_t **out_len);
 void pieces_all_color_offset(PiecesList *pl, Color c, int8_t *out_index, int8_t *out_len);
 
+typedef uint64_t AttackMap;
+#define ATTACK_MAP_HAS(map, x, y) ((map & (1ULL << (x + y * 8))) != 0)
+#define ATTACK_MAP_SET(map, x, y) (map |= (1ULL << (x + y * 8)))
+
 #define NO_EN_PASSANT (-9)
 
 typedef struct BoardState
@@ -49,7 +53,7 @@ typedef struct BoardState
 
 BoardState load_fen(const char *fen);
 void print_board(BoardState *bs);
-void print_attack_map(bool out_map[8][8]);
+void print_attack_map(AttackMap map);
 
 void set_piece(BoardState *bs, Pos pos, Piece p);
 Piece get_piece(BoardState *bs, Pos pos);
@@ -70,7 +74,7 @@ void generate_knight_pseudo_moves(BoardState *bs, Pos pos, Array(Move) * out_mov
 
 void generate_legal_moves(BoardState *bs, Color color, Array(Move) * out_moves);
 
-void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8]);
+AttackMap generate_attack_map(BoardState *bs, Color color);
 
 double evaluate(BoardState *bs);
 Move search_move(BoardState *bs, int depth);
