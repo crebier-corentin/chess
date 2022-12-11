@@ -1,4 +1,5 @@
 #include "board.h"
+#include "evaluation.h"
 #include "greatest.h"
 #include "move.h"
 #include "perft.h"

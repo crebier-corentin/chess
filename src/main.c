@@ -1,5 +1,6 @@
 #include "array.h"
 #include "board.h"
+#include "evaluation.h"
 #include "move.h"
 #include "perft.h"
 #include "piece.h"
@@ -72,14 +73,8 @@ ssize_t getline(char **lineptr, size_t *n, FILE *stream)
     return pos;
 }
 
-int main(int argc, char *argv[])
+void main_perft(int argc, char *argv[])
 {
-    zobrist_init();
-
-    (void)argc;
-    (void)argv;
-
-    SetConsoleOutputCP(65001); // unicode
 
     char *fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     // if (argc > 1)
@@ -109,6 +104,56 @@ int main(int argc, char *argv[])
     {
         printf("%llu\n", perft(bs, depth));
     }
+}
+
+void main_search(int argc, char *argv[])
+{
+    char *fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    if (argc > 1)
+    {
+        fen = argv[1];
+    }
+
+    int depth = 4;
+    if (argc > 1)
+    {
+        depth = atoi(argv[1]);
+    }
+
+    BoardState bs = load_fen(fen);
+
+    while (true)
+    {
+        char input_buffer[256];
+        scanf("%255s", input_buffer);
+
+        if (strcmp(input_buffer, "quit") == 0)
+        {
+            break;
+        }
+
+        Move input_move = parse_algebraic_notation(&bs, input_buffer);
+        make_move(&bs, input_move);
+        print_board(&bs);
+
+        Move m = search_move(&bs, depth);
+        make_move(&bs, m);
+        char buffer[6];
+        move_to_long_notation(m, buffer);
+        printf("%s\n", buffer);
+    }
+}
+
+int main(int argc, char *argv[])
+{
+    zobrist_init();
+
+    (void)argc;
+    (void)argv;
+
+    SetConsoleOutputCP(65001); // unicode
+
+    main_search(argc, argv);
 
     return 0;
 }
