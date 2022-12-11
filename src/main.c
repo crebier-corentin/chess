@@ -75,7 +75,6 @@ ssize_t getline(char **lineptr, size_t *n, FILE *stream)
 int main(int argc, char *argv[])
 {
     zobrist_init();
-    cache_init();
 
     (void)argc;
     (void)argv;

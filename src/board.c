@@ -3,8 +3,6 @@
 #include "move.h"
 #include "piece.h"
 #include "zobrist.h"
-#include <SDL.h>
-#include <SDL_mutex.h>
 #include <assert.h>
 #include <float.h>
 #include <limits.h>
@@ -14,54 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <windows.h>
-
-typedef struct AttackMapCacheEntry
-{
-    uint64_t key;
-    AttackMap value;
-} AttackMapCacheEntry;
-typedef struct AttackMapCache
-{
-    SRWLOCK lock;
-    size_t index;
-    AttackMapCacheEntry entries[10];
-} AttackMapCache;
-
-static void attack_map_cache_add(AttackMapCache *cache, AttackMapCacheEntry entry)
-{
-    assert(cache != NULL);
-
-    AcquireSRWLockExclusive(&cache->lock);
-    cache->entries[cache->index] = entry;
-    cache->index = (cache->index + 1) % 10;
-    ReleaseSRWLockExclusive(&cache->lock);
-}
-static AttackMapCacheEntry *attack_map_cache_find(AttackMapCache *cache, uint64_t key)
-{
-    assert(cache != NULL);
-
-    AcquireSRWLockShared(&cache->lock);
-    for (size_t i = 0; i < 10; i++)
-    {
-        if (cache->entries[i].key == key)
-        {
-            ReleaseSRWLockShared(&cache->lock);
-            return &cache->entries[i];
-        }
-    }
-    ReleaseSRWLockShared(&cache->lock);
-    return NULL;
-}
-static AttackMapCache cache_white_attack_map = {.lock = SRWLOCK_INIT};
-static AttackMapCache cache_black_attack_map = {.lock = SRWLOCK_INIT};
-
-void cache_init()
-{
-}
-void cache_free()
-{
-}
 
 static int8_t pieces_all_color_len(PiecesListLengths *pll)
 {
@@ -399,8 +349,9 @@ void print_board(BoardState *bs)
     }
 }
 
-void print_attack_map(AttackMap map)
+void print_attack_map(bool attack_map[8][8])
 {
+    assert(attack_map != NULL);
 
     fputs("+---+---+---+---+---+---+---+---+\n", stdout);
 
@@ -410,7 +361,7 @@ void print_attack_map(AttackMap map)
         {
             fputs("| ", stdout);
 
-            fputs(ATTACK_MAP_HAS(map, x, y) ? "x" : " ", stdout);
+            fputs(attack_map[x][y] ? "x" : " ", stdout);
 
             fputs(" ", stdout);
         }
@@ -642,8 +593,10 @@ bool is_in_check(BoardState *bs, Color color)
     Pos king_pos = bs->pieces.list[king_index];
 
     // Check if any piece can attack the king
-    AttackMap attack_map = generate_attack_map(bs, color == C_WHITE ? C_BLACK : C_WHITE);
-    return ATTACK_MAP_HAS(attack_map, king_pos.x, king_pos.y);
+    bool attack_map[8][8];
+    generate_attack_map(bs, color == C_WHITE ? C_BLACK : C_WHITE, attack_map);
+
+    return attack_map[king_pos.x][king_pos.y];
 }
 
 // Move generation //
@@ -907,17 +860,16 @@ void generate_king_pseudo_moves(BoardState *bs, Pos pos, Array(Move) * out_moves
         return;
     }
 
-    AttackMap attack_map = generate_attack_map(bs, color == C_WHITE ? C_BLACK : C_WHITE);
+    bool attack_map[8][8];
+    generate_attack_map(bs, color == C_WHITE ? C_BLACK : C_WHITE, attack_map);
 
-    if (can_castle_kingside && !ATTACK_MAP_HAS(attack_map, 4, pos.y) && !ATTACK_MAP_HAS(attack_map, 5, pos.y) &&
-        !ATTACK_MAP_HAS(attack_map, 6, pos.y))
+    if (can_castle_kingside && !attack_map[4][pos.y] && !attack_map[5][pos.y] && !attack_map[6][pos.y])
     {
         Move move = (Move){pos, (Pos){pos.x + 2, pos.y}, PROMOTION_NONE, CASTLE_KINGSIDE, false};
         array_push(*out_moves, move);
     }
 
-    if (can_castle_queenside && !ATTACK_MAP_HAS(attack_map, 4, pos.y) && !ATTACK_MAP_HAS(attack_map, 3, pos.y) &&
-        !ATTACK_MAP_HAS(attack_map, 2, pos.y))
+    if (can_castle_queenside && !attack_map[4][pos.y] && !attack_map[3][pos.y] && !attack_map[2][pos.y])
     {
         Move move = (Move){pos, (Pos){pos.x - 2, pos.y}, PROMOTION_NONE, CASTLE_QUEENSIDE, false};
         array_push(*out_moves, move);
@@ -1005,209 +957,197 @@ void generate_legal_moves(BoardState *bs, Color color, Array(Move) * out_moves)
 }
 
 // Attack Map generation //
-static AttackMap generate_slide_attack_map(BoardState *bs, Pos pos, int8_t direction_x, int8_t direction_y)
+static void generate_slide_attack_map(BoardState *bs, Pos pos, int8_t direction_x, int8_t direction_y,
+                                      bool out_map[8][8])
 {
     assert(bs != NULL);
-
-    AttackMap map = 0;
+    assert(out_map != NULL);
 
     for (Pos target_pos = {pos.x + direction_x, pos.y + direction_y};
          target_pos.x >= 0 && target_pos.x <= 7 && target_pos.y >= 0 && target_pos.y <= 7;
          target_pos.x += direction_x, target_pos.y += direction_y)
     {
-        ATTACK_MAP_SET(map, target_pos.x, target_pos.y);
+
+        out_map[target_pos.x][target_pos.y] = true;
 
         if (!is_empty(get_piece(bs, target_pos)))
         {
             break;
         }
     }
-    return map;
 }
-static AttackMap generate_queen_attack_map(BoardState *bs, Pos pos)
+static void generate_queen_attack_map(BoardState *bs, Pos pos, bool out_map[8][8])
 {
     assert(bs != NULL);
+    assert(out_map != NULL);
     assert(is_queen(get_piece(bs, pos)));
 
-    AttackMap map = 0;
-    map |= generate_slide_attack_map(bs, pos, 0, 1);
-    map |= generate_slide_attack_map(bs, pos, 0, -1);
-    map |= generate_slide_attack_map(bs, pos, 1, 0);
-    map |= generate_slide_attack_map(bs, pos, -1, 0);
+    generate_slide_attack_map(bs, pos, 0, 1, out_map);
+    generate_slide_attack_map(bs, pos, 0, -1, out_map);
+    generate_slide_attack_map(bs, pos, 1, 0, out_map);
+    generate_slide_attack_map(bs, pos, -1, 0, out_map);
 
-    map |= generate_slide_attack_map(bs, pos, 1, 1);
-    map |= generate_slide_attack_map(bs, pos, -1, -1);
-    map |= generate_slide_attack_map(bs, pos, 1, -1);
-    map |= generate_slide_attack_map(bs, pos, -1, 1);
-
-    return map;
+    generate_slide_attack_map(bs, pos, 1, 1, out_map);
+    generate_slide_attack_map(bs, pos, -1, -1, out_map);
+    generate_slide_attack_map(bs, pos, 1, -1, out_map);
+    generate_slide_attack_map(bs, pos, -1, 1, out_map);
 }
-static AttackMap generate_rook_attack_map(BoardState *bs, Pos pos)
+static void generate_rook_attack_map(BoardState *bs, Pos pos, bool out_map[8][8])
 {
     assert(bs != NULL);
+    assert(out_map != NULL);
     assert(is_rook(get_piece(bs, pos)));
 
-    AttackMap map = 0;
-    map |= generate_slide_attack_map(bs, pos, 0, 1);
-    map |= generate_slide_attack_map(bs, pos, 0, -1);
-    map |= generate_slide_attack_map(bs, pos, 1, 0);
-    map |= generate_slide_attack_map(bs, pos, -1, 0);
-    return map;
+    generate_slide_attack_map(bs, pos, 0, 1, out_map);
+    generate_slide_attack_map(bs, pos, 0, -1, out_map);
+    generate_slide_attack_map(bs, pos, 1, 0, out_map);
+    generate_slide_attack_map(bs, pos, -1, 0, out_map);
 }
-static AttackMap generate_bishop_attack_map(BoardState *bs, Pos pos)
+static void generate_bishop_attack_map(BoardState *bs, Pos pos, bool out_map[8][8])
 {
     assert(bs != NULL);
+    assert(out_map != NULL);
     assert(is_bishop(get_piece(bs, pos)));
 
-    AttackMap map = 0;
-    map |= generate_slide_attack_map(bs, pos, 1, 1);
-    map |= generate_slide_attack_map(bs, pos, -1, -1);
-    map |= generate_slide_attack_map(bs, pos, 1, -1);
-    map |= generate_slide_attack_map(bs, pos, -1, 1);
-    return map;
+    generate_slide_attack_map(bs, pos, 1, 1, out_map);
+    generate_slide_attack_map(bs, pos, -1, -1, out_map);
+    generate_slide_attack_map(bs, pos, 1, -1, out_map);
+    generate_slide_attack_map(bs, pos, -1, 1, out_map);
 }
 
-static AttackMap generate_step_attack_map(Pos target_pos)
+static void generate_step_attack_map(Pos target_pos, bool out_map[8][8])
 {
-    AttackMap map = 0;
+
+    assert(out_map != NULL);
+
     if (target_pos.x >= 0 && target_pos.x <= 7 && target_pos.y >= 0 && target_pos.y <= 7)
     {
-        ATTACK_MAP_SET(map, target_pos.x, target_pos.y);
+        out_map[target_pos.x][target_pos.y] = true;
     }
-    return map;
 }
-static AttackMap generate_king_attack_map(Pos pos)
+static void generate_king_attack_map(Pos pos, bool out_map[8][8])
 {
-    AttackMap map = 0;
-    map |= generate_step_attack_map((Pos){pos.x - 1, pos.y - 1});
-    map |= generate_step_attack_map((Pos){pos.x - 1, pos.y});
-    map |= generate_step_attack_map((Pos){pos.x - 1, pos.y + 1});
+    assert(out_map != NULL);
 
-    map |= generate_step_attack_map((Pos){pos.x, pos.y - 1});
-    map |= generate_step_attack_map((Pos){pos.x, pos.y + 1});
+    generate_step_attack_map((Pos){pos.x - 1, pos.y - 1}, out_map);
+    generate_step_attack_map((Pos){pos.x - 1, pos.y}, out_map);
+    generate_step_attack_map((Pos){pos.x - 1, pos.y + 1}, out_map);
 
-    map |= generate_step_attack_map((Pos){pos.x + 1, pos.y - 1});
-    map |= generate_step_attack_map((Pos){pos.x + 1, pos.y});
-    map |= generate_step_attack_map((Pos){pos.x + 1, pos.y + 1});
-    return map;
+    generate_step_attack_map((Pos){pos.x, pos.y - 1}, out_map);
+    generate_step_attack_map((Pos){pos.x, pos.y + 1}, out_map);
+
+    generate_step_attack_map((Pos){pos.x + 1, pos.y - 1}, out_map);
+    generate_step_attack_map((Pos){pos.x + 1, pos.y}, out_map);
+    generate_step_attack_map((Pos){pos.x + 1, pos.y + 1}, out_map);
 }
-static AttackMap generate_knight_attack_map(Pos pos)
+static void generate_knight_attack_map(Pos pos, bool out_map[8][8])
 {
-    AttackMap map = 0;
-    map |= generate_step_attack_map((Pos){pos.x - 2, pos.y - 1});
-    map |= generate_step_attack_map((Pos){pos.x - 2, pos.y + 1});
+    assert(out_map != NULL);
 
-    map |= generate_step_attack_map((Pos){pos.x + 2, pos.y - 1});
-    map |= generate_step_attack_map((Pos){pos.x + 2, pos.y + 1});
+    generate_step_attack_map((Pos){pos.x - 2, pos.y - 1}, out_map);
+    generate_step_attack_map((Pos){pos.x - 2, pos.y + 1}, out_map);
 
-    map |= generate_step_attack_map((Pos){pos.x + 1, pos.y - 2});
-    map |= generate_step_attack_map((Pos){pos.x - 1, pos.y - 2});
+    generate_step_attack_map((Pos){pos.x + 2, pos.y - 1}, out_map);
+    generate_step_attack_map((Pos){pos.x + 2, pos.y + 1}, out_map);
 
-    map |= generate_step_attack_map((Pos){pos.x + 1, pos.y + 2});
-    map |= generate_step_attack_map((Pos){pos.x - 1, pos.y + 2});
-    return map;
+    generate_step_attack_map((Pos){pos.x + 1, pos.y - 2}, out_map);
+    generate_step_attack_map((Pos){pos.x - 1, pos.y - 2}, out_map);
+
+    generate_step_attack_map((Pos){pos.x + 1, pos.y + 2}, out_map);
+    generate_step_attack_map((Pos){pos.x - 1, pos.y + 2}, out_map);
 }
-static AttackMap generate_pawn_attack_map(BoardState *bs, Pos pos)
+static void generate_pawn_attack_map(BoardState *bs, Pos pos, bool out_map[8][8])
 {
     assert(bs != NULL);
+    assert(out_map != NULL);
     assert(is_pawn(get_piece(bs, pos)));
 
     int8_t direction = get_color(get_piece(bs, pos)) == C_WHITE ? -1 : 1;
 
-    AttackMap map = 0;
-    map |= generate_step_attack_map((Pos){pos.x - 1, pos.y + direction});
-    map |= generate_step_attack_map((Pos){pos.x + 1, pos.y + direction});
-    return map;
+    generate_step_attack_map((Pos){pos.x - 1, pos.y + direction}, out_map);
+    generate_step_attack_map((Pos){pos.x + 1, pos.y + direction}, out_map);
 }
 
-static AttackMap generate_piece_attack_map(BoardState *bs, Pos pos)
+static void generate_piece_attack_map(BoardState *bs, Pos pos, bool out_map[8][8])
 {
     assert(bs != NULL);
+    assert(out_map != NULL);
 
     Piece piece = get_piece(bs, pos);
     switch (get_type(piece))
     {
     case PT_PAWN: {
-        return generate_pawn_attack_map(bs, pos);
+        generate_pawn_attack_map(bs, pos, out_map);
+        break;
     }
     case PT_KNIGHT: {
-        return generate_knight_attack_map(pos);
+        generate_knight_attack_map(pos, out_map);
+        break;
     }
     case PT_BISHOP: {
-        return generate_bishop_attack_map(bs, pos);
+        generate_bishop_attack_map(bs, pos, out_map);
+        break;
     }
     case PT_ROOK: {
-        return generate_rook_attack_map(bs, pos);
+        generate_rook_attack_map(bs, pos, out_map);
+        break;
     }
     case PT_QUEEN: {
-        return generate_queen_attack_map(bs, pos);
+        generate_queen_attack_map(bs, pos, out_map);
+        break;
     }
     case PT_KING: {
-        return generate_king_attack_map(pos);
+        generate_king_attack_map(pos, out_map);
+        break;
     }
     }
 }
 
-static AttackMap generate_attack_map_(BoardState *bs, Color color)
+void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8])
 {
     assert(bs != NULL);
+    assert(out_map != NULL);
+
+    memset(out_map, 0, sizeof(bool) * 8 * 8);
 
     int8_t index;
     int8_t *len;
 
-    AttackMap map = 0;
     pieces_offset(&bs->pieces, PT_PAWN, color, &index, &len);
     for (int8_t i = index; i < index + *len; i++)
     {
-        map |= generate_pawn_attack_map(bs, bs->pieces.list[i]);
+        generate_pawn_attack_map(bs, bs->pieces.list[i], out_map);
     }
 
     pieces_offset(&bs->pieces, PT_KNIGHT, color, &index, &len);
     for (int8_t i = index; i < index + *len; i++)
     {
-        map |= generate_knight_attack_map(bs->pieces.list[i]);
+        generate_knight_attack_map(bs->pieces.list[i], out_map);
     }
 
     pieces_offset(&bs->pieces, PT_BISHOP, color, &index, &len);
     for (int8_t i = index; i < index + *len; i++)
     {
-        map |= generate_bishop_attack_map(bs, bs->pieces.list[i]);
+        generate_bishop_attack_map(bs, bs->pieces.list[i], out_map);
     }
 
     pieces_offset(&bs->pieces, PT_ROOK, color, &index, &len);
     for (int8_t i = index; i < index + *len; i++)
     {
-        map |= generate_rook_attack_map(bs, bs->pieces.list[i]);
+        generate_rook_attack_map(bs, bs->pieces.list[i], out_map);
     }
 
     pieces_offset(&bs->pieces, PT_QUEEN, color, &index, &len);
     for (int8_t i = index; i < index + *len; i++)
     {
-        map |= generate_queen_attack_map(bs, bs->pieces.list[i]);
+        generate_queen_attack_map(bs, bs->pieces.list[i], out_map);
     }
 
     pieces_offset(&bs->pieces, PT_KING, color, &index, &len);
     for (int8_t i = index; i < index + *len; i++)
     {
-        map |= generate_king_attack_map(bs->pieces.list[i]);
+        generate_king_attack_map(bs->pieces.list[i], out_map);
     }
-    return map;
-}
-
-AttackMap generate_attack_map(BoardState *bs, Color color)
-{
-    assert(bs != NULL);
-
-    AttackMapCache *cache = color == C_WHITE ? &cache_white_attack_map : &cache_black_attack_map;
-    AttackMapCacheEntry *entry = attack_map_cache_find(cache, bs->zobrist_hash);
-    if (entry != NULL)
-    {
-        return entry->value;
-    }
-
-    AttackMap map = generate_attack_map_(bs, color);
-    attack_map_cache_add(cache, (AttackMapCacheEntry){bs->zobrist_hash, map});
-    return map;
 }
 
 static int count_doubled_and_isolated_pawns(BoardState *bs, Color c)
