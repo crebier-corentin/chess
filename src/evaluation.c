@@ -276,29 +276,22 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
     }
 
     Array(Move) moves = array_create_size(Move, 32);
-    generate_legal_moves(bs, bs->turn, &moves);
+    generate_pseudo_moves(bs, bs->turn, &moves);
     sort_r(moves, array_len(moves), sizeof(Move), move_sorter, bs); // Order moves
 
-    // Checkmate and stalemate detection
-    if (array_len(moves) == 0)
-    {
-        array_free(moves);
-
-        if (is_in_check(bs, c))
-        {
-            return MATE_VALUE;
-        }
-        else
-        {
-            return DRAW_VALUE;
-        }
-    }
-
+    bool had_legal_move = false;
     double value = -INFINITY;
     for (size_t i = 0; i < array_len(moves); i++)
     {
         BoardState new_bs = *bs;
         make_move(&new_bs, moves[i]);
+
+        //  Check if move was legal
+        if (is_in_check(&new_bs, c))
+        {
+            continue;
+        }
+        had_legal_move = true;
 
         double score = -negamax(&new_bs, depth - 1, -beta, -alpha, c == C_WHITE ? C_BLACK : C_WHITE, NULL);
         if (score > value)
@@ -317,6 +310,19 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
     }
 
     array_free(moves);
+
+    // Checkmate and stalemate detection
+    if (!had_legal_move)
+    {
+        if (is_in_check(bs, c))
+        {
+            return MATE_VALUE + -depth;
+        }
+        else
+        {
+            return DRAW_VALUE;
+        }
+    }
 
     return value;
 }

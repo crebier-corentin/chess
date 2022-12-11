@@ -152,6 +152,19 @@ TEST test_mate_in_two()
         ASSERT_STR_EQ(buffer, "b6b7");
     }
 
+    {
+        BoardState bs = load_fen("r7/3krn2/8/pp3K2/q7/8/8/8 b - - 7 46");
+        char buffer[6] = {0};
+        move_to_long_notation(search_move(&bs, 5), buffer);
+        ASSERT_STR_EQ(buffer, "a8g8");
+
+        make_move(&bs, parse_algebraic_notation(&bs, "Rg8"));
+        make_move(&bs, parse_algebraic_notation(&bs, "Kf6"));
+
+        move_to_long_notation(search_move(&bs, 5), buffer);
+        ASSERT_STR_EQ(buffer, "a4f4");
+    }
+
     PASS();
 }
 

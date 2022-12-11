@@ -114,7 +114,7 @@ void main_search(int argc, char *argv[])
         fen = argv[1];
     }
 
-    int depth = 4;
+    int depth = 7;
     if (argc > 1)
     {
         depth = atoi(argv[1]);
@@ -153,14 +153,16 @@ int main(int argc, char *argv[])
 
     SetConsoleOutputCP(65001); // unicode
 
-    BoardState bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    //  main_search(argc, argv);
+
+    char *fen = "rn2kb1r/pp1b1ppp/8/qB1Q4/3Pp3/4P3/PP1B1PPP/R3K1NR b KQkq - 2 10";
+
+    BoardState bs = load_fen(fen);
+
     Move m = search_move(&bs, 7);
-    make_move(&bs, m);
     char buffer[6];
     move_to_long_notation(m, buffer);
     printf("%s\n", buffer);
-
-    // main_search(argc, argv);
 
     return 0;
 }

@@ -6,9 +6,7 @@ project(
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_C_CLANG_TIDY
-  "clang-tidy;-checks=clang-analyzer-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling"
-)
+set(CMAKE_C_CLANG_TIDY"clang-tidy;-checks=clang-analyzer-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 
@@ -16,7 +14,7 @@ add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 
 if(MSVC)
-  add_compile_options(/W4)
+  add_compile_options(/W4 /arch:AVX2)
   set(CMAKE_INCLUDE_SYSTEM_FLAG_C "-external:I") # fix issue with clang-tidy not recognizing -external:I with a space
 
 # if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -24,7 +22,7 @@ if(MSVC)
 # set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF) # incompatible with address
 # sanitizer endif()
 else()
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic -march=native)
 
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_options(-fno-omit-frame-pointer -fsanitize=address)
