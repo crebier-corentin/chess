@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 
     BoardState bs = load_fen(fen);
 
-    Move m = search_move(&bs, 7);
+    Move m = search_move(&bs, 8);
     char buffer[6];
     move_to_long_notation(m, buffer);
     printf("%s\n", buffer);

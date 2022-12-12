@@ -268,6 +268,40 @@ static int move_sorter(const void *a_, const void *b_, void *context_)
 #define MATE_VALUE -999999
 #define DRAW_VALUE 0
 
+typedef struct NegamaxEntry
+{
+    uint64_t key;
+    double value;
+    Move move;
+} NegamaxEntry;
+static NegamaxEntry *cache = NULL;
+
+static double negamax(BoardState *bs, int depth, double alpha, double beta, Color c,
+                      Move *out_move); // forward declaration
+static double negamax_cache(BoardState *bs, int depth, double alpha, double beta, Color c, Move *out_move)
+{
+    NegamaxEntry *cache_value = hmgetp_null(cache, bs->zobrist_hash);
+    if (cache_value != NULL)
+    {
+        if (out_move != NULL)
+        {
+            *out_move = cache_value->move;
+        }
+        return cache_value->value;
+    }
+
+    NegamaxEntry entry;
+    entry.key = bs->zobrist_hash;
+    entry.value = negamax(bs, depth, alpha, beta, c, &entry.move);
+    hmputs(cache, entry);
+
+    if (out_move != NULL)
+    {
+        *out_move = entry.move;
+    }
+    return entry.value;
+}
+
 static double negamax(BoardState *bs, int depth, double alpha, double beta, Color c, Move *out_move)
 {
     if (depth == 0)
@@ -293,7 +327,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
         }
         had_legal_move = true;
 
-        double score = -negamax(&new_bs, depth - 1, -beta, -alpha, c == C_WHITE ? C_BLACK : C_WHITE, NULL);
+        double score = -negamax_cache(&new_bs, depth - 1, -beta, -alpha, c == C_WHITE ? C_BLACK : C_WHITE, NULL);
         if (score > value)
         {
             value = score;
@@ -335,7 +369,7 @@ Move search_move(BoardState *bs, int depth)
     Move best_move = {0};
     negamax(bs, depth, -INFINITY, INFINITY, bs->turn, &best_move);
 
-    // printf("evalute %llu\n", count);
+    printf("evalute %llu\n", count);
 
     return best_move;
 }
