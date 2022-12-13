@@ -280,6 +280,57 @@ typedef struct NegamaxEntry
 } NegamaxEntry;
 static NegamaxEntry *cache = NULL;
 
+static double negamax_captures(BoardState *bs, double alpha, double beta, Color c)
+{
+    double score = evaluate(bs) * (c == C_WHITE ? 1 : -1);
+    if (score >= beta)
+    {
+        return beta;
+    }
+    alpha = MAX(alpha, score);
+
+    Array(Move) all_moves = array_create_size(Move, 32);
+    generate_pseudo_moves(bs, bs->turn, &all_moves);
+
+    // Filter out non captures
+    Array(Move) moves = array_create_size(Move, array_len(all_moves));
+    for (size_t i = 0; i < array_len(all_moves); i++)
+    {
+        if (!is_empty(get_piece(bs, all_moves[i].to)))
+        {
+            array_push(moves, all_moves[i]);
+        }
+    }
+    array_free(all_moves);
+
+    // Order moves
+    sort_r(moves, array_len(moves), sizeof(Move), move_sorter, bs);
+
+    for (size_t i = 0; i < array_len(moves); i++)
+    {
+
+        BoardState new_bs = *bs;
+        make_move(&new_bs, moves[i]);
+
+        //  Check if move was legal
+        if (is_in_check(&new_bs, c))
+        {
+            continue;
+        }
+
+        double score = -negamax_captures(&new_bs, -beta, -alpha, c == C_WHITE ? C_BLACK : C_WHITE);
+        alpha = MAX(alpha, score);
+        if (alpha >= beta)
+        {
+            break;
+        }
+    }
+
+    array_free(moves);
+
+    return alpha;
+}
+
 static double negamax(BoardState *bs, int depth, double alpha, double beta, Color c,
                       Move *out_move); // forward declaration
 static double negamax_cache(BoardState *bs, int depth, double alpha, double beta, Color c, Move *out_move)
@@ -311,7 +362,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
 {
     if (depth == 0)
     {
-        return evaluate(bs) * (c == C_WHITE ? 1 : -1);
+        return negamax_captures(bs, alpha, beta, c);
     }
 
     Array(Move) moves = array_create_size(Move, 32);
