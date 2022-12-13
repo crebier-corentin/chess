@@ -7,7 +7,6 @@
 #include <float.h>
 #include <limits.h>
 #include <math.h>
-#include <sort_r.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -270,22 +269,12 @@ static double evaluate_move(BoardState *bs, Move *move, Move *cache_move)
     return score;
 }
 
-typedef struct MoveSorterContext
-{
-    BoardState *bs;
-    Move *cache_move;
-} MoveSorterContext;
-
-static int move_sorter(const void *a_, const void *b_, void *context_)
+static int move_sorter(const void *a_, const void *b_)
 {
     Move *a = (Move *)a_;
     Move *b = (Move *)b_;
-    MoveSorterContext *context = (MoveSorterContext *)context_;
 
-    double a_score = evaluate_move(context->bs, a, context->cache_move);
-    double b_score = evaluate_move(context->bs, b, context->cache_move);
-
-    return (int)(b_score - a_score);
+    return (int)(b->order_move_score - a->order_move_score);
 }
 
 static void order_moves(BoardState *bs, Array(Move) moves)
@@ -293,14 +282,18 @@ static void order_moves(BoardState *bs, Array(Move) moves)
     assert(bs != NULL);
     assert(moves != NULL);
 
-    MoveSorterContext context = {bs, NULL};
     NegamaxEntry *cache_value = hmgetp_null(cache, bs->zobrist_hash);
+    Move *cache_move = NULL;
     if (cache_value != NULL)
     {
-        context.cache_move = &cache_value->move;
+        cache_move = &cache_value->move;
     }
 
-    sort_r(moves, array_len(moves), sizeof(Move), move_sorter, &context);
+    for (size_t i = 0; i < array_len(moves); i++)
+    {
+        moves[i].order_move_score = evaluate_move(bs, &moves[i], cache_move);
+    }
+    qsort(moves, array_len(moves), sizeof(Move), &move_sorter);
 }
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))

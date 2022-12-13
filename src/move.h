@@ -45,6 +45,7 @@ typedef struct Move
     Promotion promotion;
     Castle castle;
     bool en_passant;
+    double order_move_score; // used for sorting moves
 } Move;
 
 bool move_equals(Move a, Move b);
