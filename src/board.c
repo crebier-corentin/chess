@@ -1149,3 +1149,20 @@ void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8])
         generate_king_attack_map(bs->pieces.list[i], out_map);
     }
 }
+
+void generate_pawns_attack_map(BoardState *bs, Color color, bool out_pawns_map[8][8])
+{
+    assert(bs != NULL);
+    assert(out_pawns_map != NULL);
+
+    memset(out_pawns_map, 0, sizeof(bool) * 8 * 8);
+
+    int8_t index;
+    int8_t *len;
+
+    pieces_offset(&bs->pieces, PT_PAWN, color, &index, &len);
+    for (int8_t i = index; i < index + *len; i++)
+    {
+        generate_pawn_attack_map(bs, bs->pieces.list[i], out_pawns_map);
+    }
+}

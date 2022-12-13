@@ -71,6 +71,7 @@ void generate_knight_pseudo_moves(BoardState *bs, Pos pos, Array(Move) * out_mov
 void generate_legal_moves(BoardState *bs, Color color, Array(Move) * out_moves);
 
 void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8]);
+void generate_pawns_attack_map(BoardState *bs, Color color, bool out_pawns_map[8][8]);
 
 #ifdef __cplusplus
 }

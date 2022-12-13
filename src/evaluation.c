@@ -254,7 +254,13 @@ static double evaluate_move(BoardState *bs, Move *move, Move *cache_move)
         break;
     }
 
-    // TODO: check attack map
+    // Penalize moving into a pawn attack
+    bool attack_map[8][8];
+    generate_pawns_attack_map(bs, get_color(move_piece) == C_WHITE ? C_BLACK : C_WHITE, attack_map);
+    if (attack_map[move->to.x][move->to.y])
+    {
+        score -= piece_value[get_type(move_piece)];
+    }
 
     if (cache_move != NULL && move_equals(*move, *cache_move))
     {
