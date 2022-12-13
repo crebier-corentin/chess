@@ -5,7 +5,7 @@
 #include <string.h>
 
 #define SCHED_IMPLEMENTATION
-#include <sched.h>
+#include <sched_lib.h>
 
 size_t perft(BoardState bs, int depth)
 {

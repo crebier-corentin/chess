@@ -6,12 +6,16 @@
 #include "piece.h"
 #include "zobrist.h"
 #include <assert.h>
+#include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 typedef intptr_t ssize_t;
 
@@ -151,15 +155,16 @@ int main(int argc, char *argv[])
     (void)argc;
     (void)argv;
 
+#ifdef _WIN32
     SetConsoleOutputCP(65001); // unicode
-
+#endif
     //  main_search(argc, argv);
 
-    char *fen = "rn2kb1r/pp1b1ppp/8/qB1Q4/3Pp3/4P3/PP1B1PPP/R3K1NR b KQkq - 2 10";
+    char *fen = "r4r1k/ppp2p1p/1b3p2/8/1P4R1/P2nP1P1/1B1P2KP/R7 w - - 2 21";
 
     BoardState bs = load_fen(fen);
 
-    Move m = search_move(&bs, 8);
+    Move m = search_move(&bs, 7);
     char buffer[6];
     move_to_long_notation(m, buffer);
     printf("%s\n", buffer);

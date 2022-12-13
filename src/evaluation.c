@@ -224,7 +224,10 @@ static double evaluate_move(BoardState *bs, Move *move)
 
     if (!is_empty(capture_piece))
     {
-        score += 10 * piece_value[capture_piece] - piece_value[move_piece];
+        // Much faster with buffer overrun ???
+        score += piece_value[get_type(capture_piece)] - piece_value[get_type(move_piece)];
+        // score += 10 * piece_value[capture_piece] - piece_value[move_piece];
+        //     printf("%f\n", score);
     }
 
     switch (move->promotion)
@@ -273,6 +276,7 @@ typedef struct NegamaxEntry
     uint64_t key;
     double value;
     Move move;
+    int depth;
 } NegamaxEntry;
 static NegamaxEntry *cache = NULL;
 
@@ -281,7 +285,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
 static double negamax_cache(BoardState *bs, int depth, double alpha, double beta, Color c, Move *out_move)
 {
     NegamaxEntry *cache_value = hmgetp_null(cache, bs->zobrist_hash);
-    if (cache_value != NULL)
+    if (cache_value != NULL && cache_value->depth == depth)
     {
         if (out_move != NULL)
         {
@@ -293,6 +297,7 @@ static double negamax_cache(BoardState *bs, int depth, double alpha, double beta
     NegamaxEntry entry;
     entry.key = bs->zobrist_hash;
     entry.value = negamax(bs, depth, alpha, beta, c, &entry.move);
+    entry.depth = depth;
     hmputs(cache, entry);
 
     if (out_move != NULL)

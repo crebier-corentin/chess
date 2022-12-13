@@ -6,7 +6,7 @@ project(
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_C_CLANG_TIDY"clang-tidy;-checks=clang-analyzer-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling")
+set(CMAKE_C_CLANG_TIDY "clang-tidy;-checks=clang-analyzer-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 
@@ -32,8 +32,8 @@ endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 find_package(PCRE2 REQUIRED MODULE)
-
 find_package(SDL2 CONFIG REQUIRED)
+find_package(Threads)
 
 add_library(libchess STATIC src/board.c src/piece.c src/move.c src/array.c
   src/pgn.c src/perft.c src/zobrist.c src/evaluation.c)
@@ -41,7 +41,8 @@ target_compile_definitions(libchess PUBLIC PCRE2_CODE_UNIT_WIDTH=8)
 target_link_libraries(libchess PUBLIC
   ${PCRE2_LIBRARIES}
   $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
-  $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>)
+  $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+  Threads::Threads)
 target_include_directories(libchess PUBLIC src/ ${PCRE2_INCLUDE_DIRS})
 
 add_executable(chess src/main.c)
