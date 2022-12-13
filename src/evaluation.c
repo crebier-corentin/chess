@@ -213,7 +213,16 @@ double evaluate(BoardState *bs)
     return score;
 }
 
-static double evaluate_move(BoardState *bs, Move *move)
+typedef struct NegamaxEntry
+{
+    uint64_t key;
+    double value;
+    Move move;
+    int depth;
+} NegamaxEntry;
+static NegamaxEntry *cache = NULL;
+
+static double evaluate_move(BoardState *bs, Move *move, Move *cache_move)
 {
     assert(bs != NULL);
     assert(move != NULL);
@@ -224,10 +233,7 @@ static double evaluate_move(BoardState *bs, Move *move)
 
     if (!is_empty(capture_piece))
     {
-        // Much faster with buffer overrun ???
-        score += piece_value[get_type(capture_piece)] - piece_value[get_type(move_piece)];
-        // score += 10 * piece_value[capture_piece] - piece_value[move_piece];
-        //     printf("%f\n", score);
+        score += 10 * piece_value[get_type(capture_piece)] - piece_value[get_type(move_piece)];
     }
 
     switch (move->promotion)
@@ -250,19 +256,45 @@ static double evaluate_move(BoardState *bs, Move *move)
 
     // TODO: check attack map
 
+    if (cache_move != NULL && move_equals(*move, *cache_move))
+    {
+        score += 1000;
+    }
+
     return score;
 }
+
+typedef struct MoveSorterContext
+{
+    BoardState *bs;
+    Move *cache_move;
+} MoveSorterContext;
 
 static int move_sorter(const void *a_, const void *b_, void *context_)
 {
     Move *a = (Move *)a_;
     Move *b = (Move *)b_;
-    BoardState *bs = (BoardState *)context_;
+    MoveSorterContext *context = (MoveSorterContext *)context_;
 
-    double a_score = evaluate_move(bs, a);
-    double b_score = evaluate_move(bs, b);
+    double a_score = evaluate_move(context->bs, a, context->cache_move);
+    double b_score = evaluate_move(context->bs, b, context->cache_move);
 
-    return (int)(a_score - b_score);
+    return (int)(b_score - a_score);
+}
+
+static void order_moves(BoardState *bs, Array(Move) moves)
+{
+    assert(bs != NULL);
+    assert(moves != NULL);
+
+    MoveSorterContext context = {bs, NULL};
+    NegamaxEntry *cache_value = hmgetp_null(cache, bs->zobrist_hash);
+    if (cache_value != NULL)
+    {
+        context.cache_move = &cache_value->move;
+    }
+
+    sort_r(moves, array_len(moves), sizeof(Move), move_sorter, &context);
 }
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -270,15 +302,6 @@ static int move_sorter(const void *a_, const void *b_, void *context_)
 
 #define MATE_VALUE -999999
 #define DRAW_VALUE 0
-
-typedef struct NegamaxEntry
-{
-    uint64_t key;
-    double value;
-    Move move;
-    int depth;
-} NegamaxEntry;
-static NegamaxEntry *cache = NULL;
 
 static double negamax_captures(BoardState *bs, double alpha, double beta, Color c)
 {
@@ -303,12 +326,10 @@ static double negamax_captures(BoardState *bs, double alpha, double beta, Color 
     }
     array_free(all_moves);
 
-    // Order moves
-    sort_r(moves, array_len(moves), sizeof(Move), move_sorter, bs);
+    order_moves(bs, moves);
 
     for (size_t i = 0; i < array_len(moves); i++)
     {
-
         BoardState new_bs = *bs;
         make_move(&new_bs, moves[i]);
 
@@ -318,7 +339,7 @@ static double negamax_captures(BoardState *bs, double alpha, double beta, Color 
             continue;
         }
 
-        double score = -negamax_captures(&new_bs, -beta, -alpha, c == C_WHITE ? C_BLACK : C_WHITE);
+        score = -negamax_captures(&new_bs, -beta, -alpha, c == C_WHITE ? C_BLACK : C_WHITE);
         alpha = MAX(alpha, score);
         if (alpha >= beta)
         {
@@ -367,23 +388,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
 
     Array(Move) moves = array_create_size(Move, 32);
     generate_pseudo_moves(bs, bs->turn, &moves);
-    sort_r(moves, array_len(moves), sizeof(Move), move_sorter, bs); // Order moves
-
-    // Put cached move first
-    NegamaxEntry *cache_value = hmgetp_null(cache, bs->zobrist_hash);
-    if (cache_value != NULL)
-    {
-        for (size_t i = 0; i < array_len(moves); i++)
-        {
-            if (move_equals(moves[i], cache_value->move))
-            {
-                Move tmp = moves[0];
-                moves[0] = moves[i];
-                moves[i] = tmp;
-                break;
-            }
-        }
-    }
+    order_moves(bs, moves);
 
     Move best_move = {0};
     bool had_legal_move = false;
