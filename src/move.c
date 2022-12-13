@@ -47,6 +47,12 @@ PieceType promotion_to_piece_type(Promotion promotion)
     }
 }
 
+bool move_equals(Move a, Move b)
+{
+    return a.to.x == b.to.x && a.to.y == b.to.y && a.from.x == b.from.x && a.from.y == b.from.y &&
+           a.promotion == b.promotion && a.castle == b.castle && a.en_passant == b.en_passant;
+}
+
 void move_to_long_notation(Move move, char buffer[6])
 {
     assert(buffer != NULL);

@@ -160,11 +160,11 @@ int main(int argc, char *argv[])
 #endif
     //  main_search(argc, argv);
 
-    char *fen = "r4r1k/ppp2p1p/1b3p2/8/1P4R1/P2nP1P1/1B1P2KP/R7 w - - 2 21";
+    char *fen = "2rq1rk1/pbp2pp1/1p2p2p/4P1Nn/2PP4/3B4/P2BQPPP/3RR1K1 b - - 0 20";
 
     BoardState bs = load_fen(fen);
 
-    Move m = search_move(&bs, 7);
+    Move m = search_move(&bs, 20);
     char buffer[6];
     move_to_long_notation(m, buffer);
     printf("%s\n", buffer);

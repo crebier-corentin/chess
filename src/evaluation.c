@@ -294,7 +294,7 @@ static double negamax_cache(BoardState *bs, int depth, double alpha, double beta
         return cache_value->value;
     }
 
-    NegamaxEntry entry;
+    NegamaxEntry entry = {0};
     entry.key = bs->zobrist_hash;
     entry.value = negamax(bs, depth, alpha, beta, c, &entry.move);
     entry.depth = depth;
@@ -318,6 +318,23 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
     generate_pseudo_moves(bs, bs->turn, &moves);
     sort_r(moves, array_len(moves), sizeof(Move), move_sorter, bs); // Order moves
 
+    // Put cached move first
+    NegamaxEntry *cache_value = hmgetp_null(cache, bs->zobrist_hash);
+    if (cache_value != NULL)
+    {
+        for (size_t i = 0; i < array_len(moves); i++)
+        {
+            if (move_equals(moves[i], cache_value->move))
+            {
+                Move tmp = moves[0];
+                moves[0] = moves[i];
+                moves[i] = tmp;
+                break;
+            }
+        }
+    }
+
+    Move best_move = {0};
     bool had_legal_move = false;
     double value = -INFINITY;
     for (size_t i = 0; i < array_len(moves); i++)
@@ -336,10 +353,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
         if (score > value)
         {
             value = score;
-            if (out_move != NULL)
-            {
-                *out_move = moves[i];
-            }
+            best_move = moves[i];
         }
         alpha = MAX(alpha, value);
         if (alpha >= beta)
@@ -363,6 +377,18 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
         }
     }
 
+    if (out_move != NULL)
+    {
+        *out_move = best_move;
+    }
+
+    hmputs(cache, ((NegamaxEntry){
+                      .key = bs->zobrist_hash,
+                      .value = value,
+                      .depth = depth,
+                      .move = best_move,
+                  }));
+
     return value;
 }
 
@@ -372,9 +398,16 @@ Move search_move(BoardState *bs, int depth)
     assert(depth > 0);
 
     Move best_move = {0};
-    negamax(bs, depth, -INFINITY, INFINITY, bs->turn, &best_move);
+    for (int i = 1; i <= depth; i++)
+    {
+        count = 0;
+        negamax(bs, i, -INFINITY, INFINITY, bs->turn, &best_move);
 
-    printf("evalute %llu\n", count);
+        printf("DEPTH %d evaluate %llu\n", i, count);
+        char buffer[6];
+        move_to_long_notation(best_move, buffer);
+        printf("%s\n", buffer);
+    }
 
     return best_move;
 }
