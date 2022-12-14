@@ -304,9 +304,9 @@ static void order_moves(BoardState *bs, Array(Move) moves)
 #define MATE_VALUE -999999
 #define DRAW_VALUE 0
 
-static double negamax_captures(BoardState *bs, double alpha, double beta, Color c)
+static double negamax_captures(BoardState *bs, double alpha, double beta)
 {
-    double score = evaluate(bs) * (c == C_WHITE ? 1 : -1);
+    double score = evaluate(bs) * (bs->turn == C_WHITE ? 1 : -1);
     if (score >= beta)
     {
         return beta;
@@ -335,12 +335,12 @@ static double negamax_captures(BoardState *bs, double alpha, double beta, Color 
         make_move(&new_bs, moves[i]);
 
         //  Check if move was legal
-        if (is_in_check(&new_bs, c))
+        if (is_in_check(&new_bs, bs->turn))
         {
             continue;
         }
 
-        score = -negamax_captures(&new_bs, -beta, -alpha, c == C_WHITE ? C_BLACK : C_WHITE);
+        score = -negamax_captures(&new_bs, -beta, -alpha);
         alpha = MAX(alpha, score);
         if (alpha >= beta)
         {
@@ -353,9 +353,8 @@ static double negamax_captures(BoardState *bs, double alpha, double beta, Color 
     return alpha;
 }
 
-static double negamax(BoardState *bs, int depth, double alpha, double beta, Color c,
-                      Move *out_move); // forward declaration
-static double negamax_cache(BoardState *bs, int depth, double alpha, double beta, Color c, Move *out_move)
+static double negamax(BoardState *bs, int depth, double alpha, double beta, Move *out_move); // forward declaration
+static double negamax_cache(BoardState *bs, int depth, double alpha, double beta, Move *out_move)
 {
     NegamaxEntry *cache_value = hmgetp_null(cache, bs->zobrist_hash);
     if (cache_value != NULL && cache_value->depth == depth)
@@ -369,7 +368,7 @@ static double negamax_cache(BoardState *bs, int depth, double alpha, double beta
 
     NegamaxEntry entry = {0};
     entry.key = bs->zobrist_hash;
-    entry.value = negamax(bs, depth, alpha, beta, c, &entry.move);
+    entry.value = negamax(bs, depth, alpha, beta, &entry.move);
     entry.depth = depth;
     hmputs(cache, entry);
 
@@ -380,11 +379,11 @@ static double negamax_cache(BoardState *bs, int depth, double alpha, double beta
     return entry.value;
 }
 
-static double negamax(BoardState *bs, int depth, double alpha, double beta, Color c, Move *out_move)
+static double negamax(BoardState *bs, int depth, double alpha, double beta, Move *out_move)
 {
     if (depth == 0)
     {
-        return negamax_captures(bs, alpha, beta, c);
+        return negamax_captures(bs, alpha, beta);
     }
 
     Array(Move) moves = array_create_size(Move, 32);
@@ -400,13 +399,13 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
         make_move(&new_bs, moves[i]);
 
         //  Check if move was legal
-        if (is_in_check(&new_bs, c))
+        if (is_in_check(&new_bs, bs->turn))
         {
             continue;
         }
         had_legal_move = true;
 
-        double score = -negamax_cache(&new_bs, depth - 1, -beta, -alpha, c == C_WHITE ? C_BLACK : C_WHITE, NULL);
+        double score = -negamax_cache(&new_bs, depth - 1, -beta, -alpha, NULL);
         if (score > value)
         {
             value = score;
@@ -424,7 +423,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Colo
     // Checkmate and stalemate detection
     if (!had_legal_move)
     {
-        if (is_in_check(bs, c))
+        if (is_in_check(bs, bs->turn))
         {
             return MATE_VALUE + -depth;
         }
@@ -458,7 +457,7 @@ Move search_move(BoardState *bs, int depth)
     for (int i = 1; i <= depth; i++)
     {
         count = 0;
-        negamax(bs, i, -INFINITY, INFINITY, bs->turn, &best_move);
+        negamax(bs, i, -INFINITY, INFINITY, &best_move);
 
         printf("DEPTH %d evaluate %llu\n", i, count);
         char buffer[6];
