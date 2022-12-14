@@ -1,8 +1,8 @@
 #pragma once
 
+#include "common.h"
 #include "move.h"
 #include "piece.h"
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

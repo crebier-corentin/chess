@@ -45,6 +45,14 @@ target_link_libraries(libchess PUBLIC
   Threads::Threads)
 target_include_directories(libchess PUBLIC src/ ${PCRE2_INCLUDE_DIRS})
 
+# optional mimalloc
+find_package(mimalloc CONFIG)
+
+if(mimalloc_FOUND)
+  target_compile_definitions(libchess PUBLIC USE_MIMALLOC)
+  target_link_libraries(libchess PUBLIC mimalloc-static)
+endif()
+
 add_executable(chess src/main.c)
 target_link_libraries(chess PRIVATE libchess)
 

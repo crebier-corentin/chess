@@ -1,8 +1,8 @@
 #pragma once
 
 #include "board.h"
+#include "common.h"
 #include <SDL.h>
-#include <stdint.h>
 
 size_t perft(BoardState bs, int depth);
 

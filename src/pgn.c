@@ -1,6 +1,4 @@
 #include "pgn.h"
-#include <assert.h>
-#include <string.h>
 
 PGNReader PGNReader_create_from_cstring(char *str)
 {

@@ -1,10 +1,7 @@
 #pragma once
 
+#include "common.h"
 #include <stb_ds.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
