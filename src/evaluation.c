@@ -221,7 +221,7 @@ typedef struct NegamaxEntry
 } NegamaxEntry;
 static NegamaxEntry *cache = NULL;
 
-static double evaluate_move(BoardState *bs, Move *move, Move *cache_move)
+static double evaluate_move(BoardState *bs, Move *move, Move *cache_move, bool pawns_attack_map[8][8])
 {
     assert(bs != NULL);
     assert(move != NULL);
@@ -254,9 +254,7 @@ static double evaluate_move(BoardState *bs, Move *move, Move *cache_move)
     }
 
     // Penalize moving into a pawn attack
-    bool attack_map[8][8];
-    generate_pawns_attack_map(bs, get_color(move_piece) == C_WHITE ? C_BLACK : C_WHITE, attack_map);
-    if (attack_map[move->to.x][move->to.y])
+    if (pawns_attack_map[move->to.x][move->to.y])
     {
         score -= piece_value[get_type(move_piece)];
     }
@@ -269,13 +267,10 @@ static double evaluate_move(BoardState *bs, Move *move, Move *cache_move)
     return score;
 }
 
-static int move_sorter(const void *a_, const void *b_)
-{
-    Move *a = (Move *)a_;
-    Move *b = (Move *)b_;
-
-    return (int)(b->order_move_score - a->order_move_score);
-}
+#define SORT_NAME move
+#define SORT_TYPE Move
+#define SORT_CMP(x, y) ((y).order_move_score - (x).order_move_score)
+#include <sort.h>
 
 static void order_moves(BoardState *bs, Array(Move) moves)
 {
@@ -289,15 +284,22 @@ static void order_moves(BoardState *bs, Array(Move) moves)
         cache_move = &cache_value->move;
     }
 
+    bool pawns_attack_map[8][8];
+    generate_pawns_attack_map(bs, bs->turn == C_WHITE ? C_BLACK : C_WHITE, pawns_attack_map); // get color from moves ?
     for (size_t i = 0; i < array_len(moves); i++)
     {
-        moves[i].order_move_score = evaluate_move(bs, &moves[i], cache_move);
+        moves[i].order_move_score = evaluate_move(bs, &moves[i], cache_move, pawns_attack_map);
     }
-    qsort(moves, array_len(moves), sizeof(Move), &move_sorter);
+    move_tim_sort(moves, array_len(moves));
 }
 
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#ifndef MAX
+#define MAX(x, y) (((x) > (y) ? (x) : (y)))
+#endif
+
+#ifndef MIN
+#define MIN(x, y) (((x) < (y) ? (x) : (y)))
+#endif
 
 #define MATE_VALUE -999999
 #define DRAW_VALUE 0
