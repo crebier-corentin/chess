@@ -272,20 +272,14 @@ static double evaluate_move(BoardState *bs, Move *move, Move *cache_move, bool p
 #define SORT_CMP(x, y) ((y).order_move_score - (x).order_move_score)
 #include <sort.h>
 
-static void order_moves(BoardState *bs, Array(Move) moves)
+static void order_moves(BoardState *bs, Array(Move) moves, Move *cache_move)
 {
     assert(bs != NULL);
     assert(moves != NULL);
 
-    NegamaxEntry *cache_value = hmgetp_null(cache, bs->zobrist_hash);
-    Move *cache_move = NULL;
-    if (cache_value != NULL)
-    {
-        cache_move = &cache_value->move;
-    }
-
     bool pawns_attack_map[8][8];
     generate_pawns_attack_map(bs, bs->turn == C_WHITE ? C_BLACK : C_WHITE, pawns_attack_map); // get color from moves ?
+
     for (size_t i = 0; i < array_len(moves); i++)
     {
         moves[i].order_move_score = evaluate_move(bs, &moves[i], cache_move, pawns_attack_map);
@@ -327,14 +321,21 @@ static double negamax_captures(BoardState *bs, double alpha, double beta)
     }
     array_free(all_moves);
 
-    order_moves(bs, moves);
+    Move *cache_move = NULL;
+    ptrdiff_t cache_index = hmgeti(cache, bs->zobrist_hash);
+    if (cache_index > 0)
+    {
+        cache_move = &cache[cache_index].move;
+    }
+
+    order_moves(bs, moves, cache_move);
 
     for (size_t i = 0; i < array_len(moves); i++)
     {
         BoardState new_bs = *bs;
         make_move(&new_bs, moves[i]);
 
-        //  Check if move was legal
+        // Check if move was legal
         if (is_in_check(&new_bs, bs->turn))
         {
             continue;
@@ -353,91 +354,86 @@ static double negamax_captures(BoardState *bs, double alpha, double beta)
     return alpha;
 }
 
-static double negamax(BoardState *bs, int depth, double alpha, double beta, Move *out_move); // forward declaration
-static double negamax_cache(BoardState *bs, int depth, double alpha, double beta, Move *out_move)
-{
-    NegamaxEntry *cache_value = hmgetp_null(cache, bs->zobrist_hash);
-    if (cache_value != NULL && cache_value->depth == depth)
-    {
-        if (out_move != NULL)
-        {
-            *out_move = cache_value->move;
-        }
-        return cache_value->value;
-    }
-
-    NegamaxEntry entry = {0};
-    entry.key = bs->zobrist_hash;
-    entry.value = negamax(bs, depth, alpha, beta, &entry.move);
-    entry.depth = depth;
-    hmputs(cache, entry);
-
-    if (out_move != NULL)
-    {
-        *out_move = entry.move;
-    }
-    return entry.value;
-}
-
 static double negamax(BoardState *bs, int depth, double alpha, double beta, Move *out_move)
 {
-    if (depth == 0)
+    Move *cache_move = NULL;
+    ptrdiff_t cache_index = hmgeti(cache, bs->zobrist_hash);
+    if (cache_index > 0)
     {
-        return negamax_captures(bs, alpha, beta);
-    }
+        NegamaxEntry cache_entry = cache[cache_index];
+        cache_move = &cache_entry.move;
 
-    Array(Move) moves = array_create_size(Move, 32);
-    generate_pseudo_moves(bs, bs->turn, &moves);
-    order_moves(bs, moves);
+        // If equal depth, can return cached move
+        if (cache_entry.depth == depth)
+        {
+            if (out_move != NULL)
+            {
+                *out_move = cache_entry.move;
+            }
+            return cache_entry.value;
+        }
+    }
 
     Move best_move = {0};
-    bool had_legal_move = false;
     double value = -INFINITY;
-    for (size_t i = 0; i < array_len(moves); i++)
+    if (depth == 0)
     {
-        BoardState new_bs = *bs;
-        make_move(&new_bs, moves[i]);
+        value = negamax_captures(bs, alpha, beta);
+    }
+    else
+    {
+        Array(Move) moves = array_create_size(Move, 32);
+        generate_pseudo_moves(bs, bs->turn, &moves);
+        order_moves(bs, moves, cache_move);
 
-        //  Check if move was legal
-        if (is_in_check(&new_bs, bs->turn))
+        bool had_legal_move = false;
+        for (size_t i = 0; i < array_len(moves); i++)
         {
-            continue;
-        }
-        had_legal_move = true;
+            BoardState new_bs = *bs;
+            make_move(&new_bs, moves[i]);
 
-        double score = -negamax_cache(&new_bs, depth - 1, -beta, -alpha, NULL);
-        if (score > value)
-        {
-            value = score;
-            best_move = moves[i];
+            //  Check if move was legal
+            if (is_in_check(&new_bs, bs->turn))
+            {
+                continue;
+            }
+            had_legal_move = true;
+
+            double score = -negamax(&new_bs, depth - 1, -beta, -alpha, NULL);
+            if (score > value)
+            {
+                value = score;
+                best_move = moves[i];
+            }
+            alpha = MAX(alpha, value);
+            if (alpha >= beta)
+            {
+                break;
+            }
         }
-        alpha = MAX(alpha, value);
-        if (alpha >= beta)
+
+        array_free(moves);
+
+        // Checkmate and stalemate detection
+        if (!had_legal_move)
         {
-            break;
+            if (is_in_check(bs, bs->turn))
+            {
+                value = MATE_VALUE + -depth;
+            }
+            else
+            {
+                value = DRAW_VALUE;
+            }
+        }
+
+        if (out_move != NULL)
+        {
+            *out_move = best_move;
         }
     }
 
-    array_free(moves);
-
-    // Checkmate and stalemate detection
-    if (!had_legal_move)
-    {
-        if (is_in_check(bs, bs->turn))
-        {
-            return MATE_VALUE + -depth;
-        }
-        else
-        {
-            return DRAW_VALUE;
-        }
-    }
-
-    if (out_move != NULL)
-    {
-        *out_move = best_move;
-    }
-
+    // Fill cache
     hmputs(cache, ((NegamaxEntry){
                       .key = bs->zobrist_hash,
                       .value = value,
