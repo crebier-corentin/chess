@@ -1,6 +1,7 @@
 
 #include "move.h"
 #include "board.h"
+#include "piece.h"
 #include <assert.h>
 #include <pcre2.h>
 #include <stdbool.h>
@@ -107,8 +108,7 @@ static Promotion char_to_promotion(char c)
     }
 }
 
-// TODO: Handle en passant
-Move parse_long_notation(char buffer[6])
+Move parse_long_notation(BoardState *bs, char buffer[6])
 {
     assert(buffer != NULL);
 
@@ -134,6 +134,14 @@ Move parse_long_notation(char buffer[6])
     else if (move.from.x == 4 && move.from.y == 7 && move.to.x == 2 && move.to.y == 7)
     {
         move.castle = CASTLE_QUEENSIDE;
+    }
+
+    // Check en passant
+    int en_passant_y = bs->turn == C_WHITE ? 2 : 5;
+    if (move.to.y == en_passant_y && is_pawn(get_piece(bs, move.from)) && is_empty(get_piece(bs, move.to)) &&
+        is_pawn(get_piece(bs, (Pos){move.to.x, move.from.y})))
+    {
+        move.en_passant = true;
     }
 
     return move;

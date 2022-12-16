@@ -51,7 +51,7 @@ typedef struct Move
 bool move_equals(Move a, Move b);
 
 void move_to_long_notation(Move move, char buffer[6]);
-Move parse_long_notation(char buffer[6]);
+Move parse_long_notation(BoardState *bs, char buffer[6]);
 
 Move parse_algebraic_notation(BoardState *bs, char *buffer);
 
