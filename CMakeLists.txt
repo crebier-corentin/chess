@@ -56,4 +56,7 @@ endif()
 add_executable(chess src/main.c)
 target_link_libraries(chess PRIVATE libchess)
 
+add_executable(chess_uci src/main_uci.c)
+target_link_libraries(chess_uci PRIVATE libchess)
+
 add_subdirectory(test)

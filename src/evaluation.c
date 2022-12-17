@@ -455,10 +455,12 @@ Move search_move(BoardState *bs, int depth)
         count = 0;
         negamax(bs, i, -INFINITY, INFINITY, &best_move);
 
+#if DEBUG_SEARCH_MOVE
         printf("DEPTH %d evaluate %llu\n", i, count);
         char buffer[6];
         move_to_long_notation(best_move, buffer);
         printf("%s\n", buffer);
+#endif
     }
 
     return best_move;
