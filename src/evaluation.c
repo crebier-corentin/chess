@@ -1,6 +1,7 @@
 #include "evaluation.h"
 #include "array.h"
 #include "board.h"
+#include "cache.h"
 #include "move.h"
 #include "piece.h"
 #include <assert.h>
@@ -212,15 +213,6 @@ double evaluate(BoardState *bs)
     return score;
 }
 
-typedef struct NegamaxEntry
-{
-    uint64_t key;
-    double value;
-    Move move;
-    int depth;
-} NegamaxEntry;
-static NegamaxEntry *cache = NULL;
-
 static double evaluate_move(BoardState *bs, Move *move, Move *cache_move, bool pawns_attack_map[8][8])
 {
     assert(bs != NULL);
@@ -298,6 +290,9 @@ static void order_moves(BoardState *bs, Array(Move) moves, Move *cache_move)
 #define MATE_VALUE -999999
 #define DRAW_VALUE 0
 
+static bool cache_init = false;
+static Cache cache;
+
 static double negamax_captures(BoardState *bs, double alpha, double beta)
 {
     double score = evaluate(bs) * (bs->turn == C_WHITE ? 1 : -1);
@@ -322,10 +317,10 @@ static double negamax_captures(BoardState *bs, double alpha, double beta)
     array_free(all_moves);
 
     Move *cache_move = NULL;
-    ptrdiff_t cache_index = hmgeti(cache, bs->zobrist_hash);
-    if (cache_index > 0)
+    CacheEntry *cache_entry = cache_get(&cache, bs->zobrist_hash);
+    if (cache_entry != NULL)
     {
-        cache_move = &cache[cache_index].move;
+        cache_move = &cache_entry->move;
     }
 
     order_moves(bs, moves, cache_move);
@@ -357,20 +352,19 @@ static double negamax_captures(BoardState *bs, double alpha, double beta)
 static double negamax(BoardState *bs, int depth, double alpha, double beta, Move *out_move)
 {
     Move *cache_move = NULL;
-    ptrdiff_t cache_index = hmgeti(cache, bs->zobrist_hash);
-    if (cache_index > 0)
+    CacheEntry *cache_entry = cache_get(&cache, bs->zobrist_hash);
+    if (cache_entry != NULL)
     {
-        NegamaxEntry cache_entry = cache[cache_index];
-        cache_move = &cache_entry.move;
+        cache_move = &cache_entry->move;
 
         // If equal depth, can return cached move
-        if (cache_entry.depth == depth)
+        if (cache_entry->depth == depth)
         {
             if (out_move != NULL)
             {
-                *out_move = cache_entry.move;
+                *out_move = cache_entry->move;
             }
-            return cache_entry.value;
+            return cache_entry->value;
         }
     }
 
@@ -434,12 +428,12 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Move
     }
 
     // Fill cache
-    hmputs(cache, ((NegamaxEntry){
-                      .key = bs->zobrist_hash,
-                      .value = value,
-                      .depth = depth,
-                      .move = best_move,
-                  }));
+    cache_set(&cache, (CacheEntry){
+                          .key = bs->zobrist_hash,
+                          .value = value,
+                          .depth = depth,
+                          .move = best_move,
+                      });
 
     return value;
 }
@@ -448,6 +442,12 @@ Move search_move(BoardState *bs, int depth)
 {
     assert(bs != NULL);
     assert(depth > 0);
+
+    if (!cache_init)
+    {
+        cache = cache_create();
+        cache_init = true;
+    }
 
     Move best_move = {0};
     for (int i = 1; i <= depth; i++)
