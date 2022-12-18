@@ -58,6 +58,8 @@ CacheEntry *cache_get(Cache *cache, uint64_t key)
 
 void cache_set(Cache *cache, CacheEntry entry)
 {
+    // TODO: correct mate score?
+    // https://github.com/SebLague/Chess-AI/blob/main/Assets/Scripts/Core/TranspositionTable.cs#L88
     CacheEntry *cache_entry = &cache->entries[hash_key(entry.key) % cache->cap];
 
 #ifdef DEBUG_CACHE

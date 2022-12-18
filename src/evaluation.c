@@ -280,8 +280,14 @@ static void order_moves(BoardState *bs, Array(Move) moves, Move *cache_move)
 static bool cache_init = false;
 static Cache cache;
 
-static double negamax_captures(BoardState *bs, double alpha, double beta)
+static double negamax_captures(SDL_atomic_t *abort_search, BoardState *bs, double alpha, double beta)
 {
+    // Handle abort
+    if (abort_search != NULL && SDL_AtomicGet(abort_search) > 0)
+    {
+        return 0;
+    }
+
     double score = evaluate(bs) * (bs->turn == C_WHITE ? 1 : -1);
     if (score >= beta)
     {
@@ -323,7 +329,7 @@ static double negamax_captures(BoardState *bs, double alpha, double beta)
             continue;
         }
 
-        score = -negamax_captures(&new_bs, -beta, -alpha);
+        score = -negamax_captures(abort_search, &new_bs, -beta, -alpha);
         alpha = MAX(alpha, score);
         if (alpha >= beta)
         {
@@ -336,8 +342,15 @@ static double negamax_captures(BoardState *bs, double alpha, double beta)
     return alpha;
 }
 
-static double negamax(BoardState *bs, int ply_from_root, int depth, double alpha, double beta, Move *out_move)
+static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_root, int depth, double alpha,
+                      double beta, Move *out_move)
 {
+    // Handle abort
+    if (abort_search != NULL && SDL_AtomicGet(abort_search) > 0)
+    {
+        return 0;
+    }
+
     if (ply_from_root > 0)
     {
 
@@ -361,7 +374,7 @@ static double negamax(BoardState *bs, int ply_from_root, int depth, double alpha
         cache_move = &cache_entry->move;
 
         // If equal depth, can return cached move
-        if (cache_entry->depth >= depth)
+        if (cache_entry->depth == depth)
         {
             if (out_move != NULL)
             {
@@ -375,7 +388,7 @@ static double negamax(BoardState *bs, int ply_from_root, int depth, double alpha
     double value = -INFINITY;
     if (depth == 0)
     {
-        value = negamax_captures(bs, alpha, beta);
+        value = negamax_captures(abort_search, bs, alpha, beta);
     }
     else
     {
@@ -396,7 +409,7 @@ static double negamax(BoardState *bs, int ply_from_root, int depth, double alpha
             }
             had_legal_move = true;
 
-            double score = -negamax(&new_bs, ply_from_root + 1, depth - 1, -beta, -alpha, NULL);
+            double score = -negamax(abort_search, &new_bs, ply_from_root + 1, depth - 1, -beta, -alpha, NULL);
             if (score > value)
             {
                 value = score;
@@ -431,6 +444,7 @@ static double negamax(BoardState *bs, int ply_from_root, int depth, double alpha
     }
 
     // TODO: try not replace if lower depth?
+    // TODO: upper lower bounds?
     // Fill cache
     cache_set(&cache, (CacheEntry){
                           .key = bs->zobrist_hash,
@@ -457,7 +471,7 @@ Move search_move(BoardState *bs, int depth)
     for (int i = 1; i <= depth; i++)
     {
         count = 0;
-        double s = negamax(bs, 0, i, -INFINITY, INFINITY, &best_move);
+        double s = negamax(NULL, bs, 0, i, -INFINITY, INFINITY, &best_move);
 #define DEBUG_SEARCH_MOVE
 #ifdef DEBUG_SEARCH_MOVE
         printf("DEPTH %d evaluate %llu score %f\n", i, count, s);
@@ -466,6 +480,53 @@ Move search_move(BoardState *bs, int depth)
         // printf("%s\n", buffer);
 
         cache_print_debug(&cache);
+#endif
+    }
+
+    return best_move;
+}
+
+Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs)
+{
+    assert(bs != NULL);
+    assert(abort_search != NULL);
+
+    if (!cache_init)
+    {
+        cache = cache_create();
+        cache_init = true;
+    }
+
+    // Always search at least at depth 1
+    Move best_move = {0};
+    negamax(NULL, bs, 0, 1, -INFINITY, INFINITY, &best_move);
+
+    int depth = 2;
+    while (true)
+    {
+        Move new_move = {0};
+
+        count = 0;
+        double s = negamax(abort_search, bs, 0, depth, -INFINITY, INFINITY, &new_move);
+
+        // Aborted
+        if (SDL_AtomicGet(abort_search) > 0)
+        {
+            break;
+        }
+
+        printf("info depth %d nodes %llu score cp %f\n", depth, count, s);
+
+        best_move = new_move;
+        depth++;
+
+#define DEBUG_SEARCH_MOVE
+#ifdef DEBUG_SEARCH_MOVE
+        printf("DEPTH %d evaluate %llu score %f\n", depth, count, s);
+        char buffer[6];
+        move_to_long_notation(best_move, buffer);
+        printf("%s\n", buffer);
+
 #endif
     }
 

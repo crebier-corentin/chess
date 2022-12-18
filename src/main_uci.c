@@ -3,8 +3,13 @@
 #include "evaluation.h"
 #include "move.h"
 #include "zobrist.h"
+#include <SDL.h>
+#include <SDL_atomic.h>
+#include <SDL_thread.h>
+#include <SDL_timer.h>
 #include <pcre2.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifdef _WIN32
@@ -143,6 +148,104 @@ BoardState parse_position_command(char *line)
     return bs;
 }
 
+BoardState bs;
+SDL_atomic_t abort_search;
+SDL_TimerID abort_timer_id;
+
+static Uint32 COMMAND_EVENT;
+
+int command_reader_task(void *_)
+{
+    (void)_;
+
+    char *line = NULL;
+    size_t line_cap = 0;
+
+    while (getline(&line, &line_cap, stdin) > 0)
+    {
+        // copy string
+        size_t len = strlen(line) + 1;
+        char *line_copy = malloc(len);
+        memcpy(line_copy, line, len);
+
+        SDL_Event event = {.user = {.type = COMMAND_EVENT, .data1 = line_copy}};
+        SDL_PushEvent(&event);
+    }
+
+    return 0;
+}
+
+int search_moves_task(void *_)
+{
+    (void)_;
+
+    SDL_AtomicSet(&abort_search, 0);
+    Move best_move = search_move_abortable(&abort_search, &bs);
+
+    char buffer[6] = {0};
+    move_to_long_notation(best_move, buffer);
+    printf("bestmove %s\n", buffer);
+    fflush(stdout);
+
+    SDL_RemoveTimer(abort_timer_id);
+
+    return 0;
+}
+
+Uint32 abort_timer_task(Uint32 _, void *__)
+{
+    (void)_;
+    (void)__;
+
+    SDL_RemoveTimer(abort_timer_id);
+    SDL_AtomicSet(&abort_search, 1);
+    printf("Aborted by timer\n");
+
+    return 0;
+}
+
+bool handle_command(char *line)
+{
+    if (strcmp(line, "uci") == 0)
+    {
+        printf("id name Coco's chess engine\n");
+        printf("id author Coco\n");
+        printf("uciok\n");
+        fflush(stdout);
+    }
+    else if (strcmp(line, "isready") == 0)
+    {
+        printf("readyok\n");
+        fflush(stdout);
+    }
+    else if (strcmp(line, "quit") == 0)
+    {
+        return true;
+    }
+    else if (strcmp(line, "print") == 0)
+    {
+        print_board(&bs);
+    }
+    else if (starts_with("position", line))
+    {
+        bs = parse_position_command(line);
+    }
+    else if (starts_with("go", line))
+    {
+        SDL_Thread *search_thread = SDL_CreateThread(&search_moves_task, "search", NULL);
+        SDL_DetachThread(search_thread);
+
+        abort_timer_id = SDL_AddTimer(1000, &abort_timer_task, NULL);
+    }
+    else if (starts_with("stop", line))
+    {
+        SDL_AtomicSet(&abort_search, 1);
+        SDL_RemoveTimer(abort_timer_id);
+    }
+
+    return false;
+}
+
 int main(int argc, char *argv[])
 {
     (void)argc;
@@ -154,45 +257,32 @@ int main(int argc, char *argv[])
 
     zobrist_init();
 
-    BoardState bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-
-    char *line = NULL;
-    size_t line_cap = 0;
-
-    while (getline(&line, &line_cap, stdin) > 0)
+    if (SDL_Init(SDL_INIT_TIMER) != 0)
     {
-        if (strcmp(line, "uci") == 0)
-        {
-            printf("id name Coco's chess engine\n");
-            printf("id author Coco\n");
-            printf("uciok\n");
-            fflush(stdout);
-        }
-        else if (strcmp(line, "isready") == 0)
-        {
-            printf("readyok\n");
-            fflush(stdout);
-        }
-        else if (strcmp(line, "quit") == 0)
+        fprintf(stderr, "%s\n", SDL_GetError());
+        abort();
+    }
+
+    bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+    COMMAND_EVENT = SDL_RegisterEvents(1);
+    SDL_CreateThread(&command_reader_task, "stdin reader", NULL);
+
+    SDL_Event event;
+    while (SDL_WaitEvent(&event))
+    {
+        if (event.type == SDL_QUIT)
         {
             break;
         }
-        else if (strcmp(line, "print") == 0)
+        else if (event.type == COMMAND_EVENT)
         {
-            print_board(&bs);
-        }
-        else if (starts_with("position", line))
-        {
-            bs = parse_position_command(line);
-        }
-        else if (starts_with("go", line))
-        {
-            Move best_move = search_move(&bs, 6);
-
-            char buffer[6] = {0};
-            move_to_long_notation(best_move, buffer);
-            printf("bestmove %s\n", buffer);
-            fflush(stdout);
+            bool quit = handle_command(event.user.data1);
+            free(event.user.data1);
+            if (quit)
+            {
+                break;
+            }
         }
     }
 
