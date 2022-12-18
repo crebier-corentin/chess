@@ -193,22 +193,9 @@ double evaluate(BoardState *bs)
     score += ((double)count_blocked_pawns(bs, C_WHITE)) * -50;
     score += ((double)count_blocked_pawns(bs, C_BLACK)) * 50;
 
-    // mobility
-    /* Array(Move) white_moves = array_create_size(Move, 32);
-    generate_legal_moves(bs, C_WHITE, &white_moves);
-    Array(Move) black_moves = array_create_size(Move, 32);
-    generate_legal_moves(bs, C_BLACK, &black_moves);
-
-    score += ((double)array_len(white_moves)) * 10;
-    score += ((double)array_len(black_moves)) * -10;
-
-    array_free(white_moves);
-    array_free(black_moves);
-    */
-
     // Piece square tables
     score += pieces_square_table(bs, C_WHITE) * 1;
-    score += pieces_square_table(bs, C_WHITE) * -1;
+    score += pieces_square_table(bs, C_BLACK) * -1;
 
     return score;
 }
