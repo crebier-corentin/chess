@@ -169,83 +169,6 @@ TEST test_mate_in_two()
     PASS();
 }
 
-TEST test_cache()
-{
-    Cache cache = cache_create();
-    cache.max_len = 3;
-
-    cache_set(&cache, (CacheEntry){.key = 0});
-    cache_set(&cache, (CacheEntry){.key = 1});
-    cache_set(&cache, (CacheEntry){.key = 2});
-
-    {
-        ASSERT_EQ(cache.len, 3);
-
-        LruNode *node = cache.first;
-        ASSERT_EQ(node->key, 2);
-        node = node->next;
-        ASSERT_EQ(node->key, 1);
-        node = node->next;
-        ASSERT_EQ(node->key, 0);
-
-        ASSERT_EQ(cache.first->key, 2);
-        ASSERT_EQ(cache.last->key, 0);
-    }
-
-    cache_get(&cache, 1);
-    {
-        ASSERT_EQ(cache.len, 3);
-
-        LruNode *node = cache.first;
-        ASSERT_EQ(node->key, 1);
-        node = node->next;
-        ASSERT_EQ(node->key, 2);
-        node = node->next;
-        ASSERT_EQ(node->key, 0);
-
-        ASSERT_EQ(cache.first->key, 1);
-        ASSERT_EQ(cache.last->key, 0);
-    }
-
-    cache_set(&cache, (CacheEntry){.key = 0, .value = 10, .depth = 20});
-    {
-        ASSERT_EQ(cache.len, 3);
-
-        LruNode *node = cache.first;
-        ASSERT_EQ(node->key, 0);
-        node = node->next;
-        ASSERT_EQ(node->key, 1);
-        node = node->next;
-        ASSERT_EQ(node->key, 2);
-
-        ASSERT_EQ(cache.first->key, 0);
-        ASSERT_EQ(cache.last->key, 2);
-
-        CacheEntry *e = cache_get(&cache, 0);
-        ASSERT_EQ(e->value, 10);
-        ASSERT_EQ(e->depth, 20);
-    }
-
-    cache_set(&cache, (CacheEntry){.key = 4});
-    {
-        ASSERT_EQ(cache.len, 3);
-
-        LruNode *node = cache.first;
-        ASSERT_EQ(node->key, 4);
-        node = node->next;
-        ASSERT_EQ(node->key, 0);
-        node = node->next;
-        ASSERT_EQ(node->key, 1);
-
-        ASSERT_EQ(cache.first->key, 4);
-        ASSERT_EQ(cache.last->key, 1);
-    }
-
-    cache_free(&cache);
-
-    PASS();
-}
-
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv)
@@ -266,8 +189,6 @@ int main(int argc, char **argv)
 
     RUN_TEST(test_mate_in_one);
     RUN_TEST(test_mate_in_two);
-
-    RUN_TEST(test_cache);
 
     GREATEST_MAIN_END();
 }

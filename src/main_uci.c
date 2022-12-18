@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
         }
         else if (starts_with("go", line))
         {
-            Move best_move = search_move(&bs, 6);
+            Move best_move = search_move(&bs, 8);
 
             char buffer[6] = {0};
             move_to_long_notation(best_move, buffer);

@@ -7,33 +7,19 @@
 extern "C" {
 #endif
 
-typedef struct LruNode LruNode;
-
 typedef struct CacheEntry
 {
+    bool is_set;
     uint64_t key;
     double value;
     Move move;
     int depth;
-    LruNode *node;
 } CacheEntry;
-
-typedef struct LruNode
-{
-    uint64_t key;
-    LruNode *prev;
-    LruNode *next;
-} LruNode;
 
 typedef struct Cache
 {
-    size_t max_len;
-    size_t len;
-    CacheEntry *hashmap;
-
-    // first is most recently used
-    LruNode *first;
-    LruNode *last;
+    size_t cap;
+    CacheEntry *entries;
 } Cache;
 
 Cache cache_create();
@@ -41,6 +27,8 @@ void cache_free(Cache *cache);
 
 CacheEntry *cache_get(Cache *cache, uint64_t key);
 void cache_set(Cache *cache, CacheEntry entry);
+
+void cache_print_debug(Cache *cache);
 
 #ifdef __cplusplus
 }

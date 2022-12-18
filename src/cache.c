@@ -1,141 +1,106 @@
 #include "cache.h"
 #include <assert.h>
+#include <siphash.h>
 #include <stb_ds.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef DEBUG_CACHE
+uint64_t col = 0;
+uint64_t new = 0;
+uint64_t update = 0;
+uint64_t miss = 0;
+uint64_t hit = 0;
+#endif
 
 Cache cache_create()
 {
     Cache c = {0};
-    c.max_len = 268435456 / sizeof(CacheEntry); // 256mb
+    c.cap = (268435456LLU * 4) / sizeof(CacheEntry); // 256mb
+                                                     // c.cap = 256000;
+    c.entries = calloc(c.cap, sizeof(CacheEntry));
     return c;
 }
 void cache_free(Cache *cache)
 {
-    hmfree(cache->hashmap);
-
-    LruNode *node = cache->first;
-    while (node != NULL)
-    {
-        LruNode *next_node = node->next;
-        free(node);
-        node = next_node;
-    }
-    cache->first = NULL;
-    cache->last = NULL;
-    cache->len = 0;
+    free(cache->entries);
+    cache->entries = NULL;
 }
 
-static void move_to_front(Cache *cache, LruNode *node)
+static const uint8_t siphash_key[] = {0xee, 0xb1, 0x87, 0x72, 0x5c, 0x81, 0x79, 0x42,
+                                      0xde, 0x73, 0x2c, 0xae, 0x90, 0x14, 0x9b, 0xf4};
+
+static uint64_t hash_key(uint64_t key)
 {
-    // Already in front
-    if (cache->first == node)
-        return;
-
-    LruNode *prev = node->prev;
-    LruNode *next = node->next;
-
-    if (prev != NULL)
-    {
-        prev->next = next;
-    }
-    if (next != NULL)
-    {
-        next->prev = prev;
-    }
-
-    if (cache->last == node)
-    {
-        cache->last = node->prev;
-    }
-    if (cache->first != NULL)
-    {
-        cache->first->prev = node;
-    }
-
-    node->prev = NULL;
-    node->next = cache->first;
-    cache->first = node;
-}
-
-static LruNode *delete_last(Cache *cache)
-{
-    assert(cache->len > 0);
-    assert(cache->last != NULL);
-
-    LruNode *prev = cache->last->prev;
-    if (prev != NULL)
-    {
-        prev->next = NULL;
-    }
-
-    if (cache->first == cache->last)
-    {
-        cache->first = NULL;
-    }
-
-    hmdel(cache->hashmap, cache->last->key);
-
-    LruNode *node = cache->last;
-
-    cache->last = prev;
-    cache->len--;
-
-    return node;
+    return key;
+    //  uint64_t hash;
+    // siphash(&key, sizeof(key), &siphash_key, &hash, sizeof(hash));
+    // return hash;
 }
 
 CacheEntry *cache_get(Cache *cache, uint64_t key)
 {
-    CacheEntry *entry = hmgetp_null(cache->hashmap, key);
-
-    // Move to front
-    if (entry != NULL)
+    CacheEntry *entry = &cache->entries[hash_key(key) % cache->cap];
+    if (!entry->is_set || entry->key != key)
     {
-        move_to_front(cache, entry->node);
+#ifdef DEBUG_CACHE
+        miss++;
+#endif
+        return NULL;
     }
+#ifdef DEBUG_CACHE
+    hit++;
+#endif
 
     return entry;
 }
 
 void cache_set(Cache *cache, CacheEntry entry)
 {
-    CacheEntry *existing_entry = hmgetp_null(cache->hashmap, entry.key);
+    CacheEntry *cache_entry = &cache->entries[hash_key(entry.key) % cache->cap];
 
-    // Already exists update it
-    if (existing_entry != NULL)
+#ifdef DEBUG_CACHE
+    if (cache_entry->is_set)
     {
-        existing_entry->value = entry.value;
-        existing_entry->move = entry.move;
-        existing_entry->depth = entry.depth;
-
-        move_to_front(cache, existing_entry->node);
-    }
-    // Create new entry
-    else
-    {
-        if (cache->len == cache->max_len)
+        if (cache_entry->key == entry.key)
         {
-            entry.node = delete_last(cache);
+            update++;
         }
         else
         {
-            entry.node = malloc(sizeof(LruNode));
+
+            col++;
         }
-
-        entry.node->key = entry.key;
-
-        if (cache->first != NULL)
-        {
-            cache->first->prev = entry.node;
-        }
-        entry.node->next = cache->first;
-        cache->first = entry.node;
-
-        if (cache->last == NULL)
-        {
-            cache->last = entry.node;
-        }
-
-        hmputs(cache->hashmap, entry);
-
-        cache->len++;
     }
+    else
+    {
+        new ++;
+    }
+#endif
+
+    cache_entry->is_set = true;
+    cache_entry->key = entry.key;
+    cache_entry->value = entry.value;
+    cache_entry->move = entry.move;
+    cache_entry->depth = entry.depth;
+}
+
+void cache_print_debug(Cache *cache)
+{
+#ifdef DEBUG_CACHE
+    printf("Hit: %llu, Miss: %llu\n", hit, miss);
+    printf("New: %llu, Update: %llu, Collision: %llu\n", new, update, col);
+
+    uint64_t count = 0;
+    for (size_t i = 0; i < cache->cap; i++)
+    {
+        if (cache->entries[i].is_set)
+        {
+            count++;
+        }
+    }
+    printf("Used: %llu/%llu (Unused: %llu) Fill rate: %f %%\n", count, cache->cap, cache->cap - count,
+           ((double)count) / ((double)cache->cap) * 100.0);
+#endif
 }

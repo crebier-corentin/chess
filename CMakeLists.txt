@@ -36,7 +36,7 @@ find_package(SDL2 CONFIG REQUIRED)
 find_package(Threads)
 
 add_library(libchess STATIC src/board.c src/piece.c src/move.c src/array.c
-  src/pgn.c src/perft.c src/zobrist.c src/evaluation.c src/cache.c)
+  src/pgn.c src/perft.c src/zobrist.c src/evaluation.c src/cache.c third_party/siphash.c)
 target_compile_definitions(libchess PUBLIC PCRE2_CODE_UNIT_WIDTH=8)
 target_link_libraries(libchess PUBLIC
   ${PCRE2_LIBRARIES}

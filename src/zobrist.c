@@ -2,6 +2,7 @@
 #include "piece.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <time.h>
 
 static uint64_t get_64_rand()
 {
@@ -21,7 +22,7 @@ static ZobristTable zobrist_table = {0};
 
 void zobrist_init()
 {
-    srand(0);
+    srand(time(NULL));
     for (int c = 0; c < 2; c++)
     {
         for (int pt = 0; pt < 6; pt++)

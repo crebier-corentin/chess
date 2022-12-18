@@ -287,7 +287,7 @@ static void order_moves(BoardState *bs, Array(Move) moves, Move *cache_move)
 #define MIN(x, y) (((x) < (y) ? (x) : (y)))
 #endif
 
-#define MATE_VALUE -999999
+#define MATE_VALUE 999999
 #define DRAW_VALUE 0
 
 static bool cache_init = false;
@@ -349,8 +349,24 @@ static double negamax_captures(BoardState *bs, double alpha, double beta)
     return alpha;
 }
 
-static double negamax(BoardState *bs, int depth, double alpha, double beta, Move *out_move)
+static double negamax(BoardState *bs, int ply_from_root, int depth, double alpha, double beta, Move *out_move)
 {
+    if (ply_from_root > 0)
+    {
+
+        // https://github.com/SebLague/Chess-AI/blob/d0832f8f1d32ddfb95525d1f1e5b772a367f272e/Assets/Scripts/Core/AI/Search.cs#L130
+        // Skip this position if a mating sequence has already been found earlier in
+        // the search, which would be shorter than any mate we could find from here.
+        // This is done by observing that alpha can't possibly be worse (and likewise
+        // beta can't  possibly be better) than being mated in the current position.
+        alpha = MAX(alpha, -MATE_VALUE + ply_from_root);
+        beta = MIN(beta, MATE_VALUE - ply_from_root);
+        if (alpha >= beta)
+        {
+            return alpha;
+        }
+    }
+
     Move *cache_move = NULL;
     CacheEntry *cache_entry = cache_get(&cache, bs->zobrist_hash);
     if (cache_entry != NULL)
@@ -358,7 +374,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Move
         cache_move = &cache_entry->move;
 
         // If equal depth, can return cached move
-        if (cache_entry->depth == depth)
+        if (cache_entry->depth >= depth)
         {
             if (out_move != NULL)
             {
@@ -393,7 +409,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Move
             }
             had_legal_move = true;
 
-            double score = -negamax(&new_bs, depth - 1, -beta, -alpha, NULL);
+            double score = -negamax(&new_bs, ply_from_root + 1, depth - 1, -beta, -alpha, NULL);
             if (score > value)
             {
                 value = score;
@@ -413,7 +429,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Move
         {
             if (is_in_check(bs, bs->turn))
             {
-                value = MATE_VALUE + -depth;
+                value = -(MATE_VALUE - ply_from_root);
             }
             else
             {
@@ -427,6 +443,7 @@ static double negamax(BoardState *bs, int depth, double alpha, double beta, Move
         }
     }
 
+    // TODO: try not replace if lower depth?
     // Fill cache
     cache_set(&cache, (CacheEntry){
                           .key = bs->zobrist_hash,
@@ -453,13 +470,15 @@ Move search_move(BoardState *bs, int depth)
     for (int i = 1; i <= depth; i++)
     {
         count = 0;
-        negamax(bs, i, -INFINITY, INFINITY, &best_move);
+        double s = negamax(bs, 0, i, -INFINITY, INFINITY, &best_move);
+#define DEBUG_SEARCH_MOVE
+#ifdef DEBUG_SEARCH_MOVE
+        printf("DEPTH %d evaluate %llu score %f\n", i, count, s);
+        // char buffer[6];
+        // move_to_long_notation(best_move, buffer);
+        // printf("%s\n", buffer);
 
-#if DEBUG_SEARCH_MOVE
-        printf("DEPTH %d evaluate %llu\n", i, count);
-        char buffer[6];
-        move_to_long_notation(best_move, buffer);
-        printf("%s\n", buffer);
+        cache_print_debug(&cache);
 #endif
     }
 
