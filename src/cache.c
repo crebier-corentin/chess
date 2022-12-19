@@ -18,7 +18,7 @@ Cache cache_create()
 {
     Cache c = {0};
     c.cap = (268435456LLU * 4) / sizeof(CacheEntry); // 256mb
-                                                     // c.cap = 256000;
+    // c.cap = 256000;
     c.entries = calloc(c.cap, sizeof(CacheEntry));
     return c;
 }
@@ -83,6 +83,7 @@ void cache_set(Cache *cache, CacheEntry entry)
 
     cache_entry->is_set = true;
     cache_entry->key = entry.key;
+    cache_entry->type = entry.type;
     cache_entry->value = entry.value;
     cache_entry->move = entry.move;
     cache_entry->depth = entry.depth;

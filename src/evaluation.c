@@ -274,8 +274,34 @@ static void order_moves(BoardState *bs, Array(Move) moves, Move *cache_move)
 #define MIN(x, y) (((x) < (y) ? (x) : (y)))
 #endif
 
-#define MATE_VALUE 999999
-#define DRAW_VALUE 0
+bool is_mate_score(double score)
+{
+    return fabs(score) > MATE_VALUE - 1000;
+}
+int ply_to_mate(double score)
+{
+    return MATE_VALUE - fabs(score);
+}
+
+// Mate score needs to be corrected to account for current depth
+static double correct_score_get(double score, int ply_from_root)
+{
+    if (is_mate_score(score))
+    {
+        int sign = score < 0 ? -1 : 1;
+        return (score * sign - ply_from_root) * sign;
+    }
+    return score;
+}
+static double correct_score_set(double score, int ply_from_root)
+{
+    if (is_mate_score(score))
+    {
+        int sign = score < 0 ? -1 : 1;
+        return (score * sign + ply_from_root) * sign;
+    }
+    return score;
+}
 
 static bool cache_init = false;
 static Cache cache;
@@ -345,26 +371,12 @@ static double negamax_captures(SDL_atomic_t *abort_search, BoardState *bs, doubl
 static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_root, int depth, double alpha,
                       double beta, Move *out_move)
 {
+    double alphaOriginal = alpha;
+
     // Handle abort
     if (abort_search != NULL && SDL_AtomicGet(abort_search) > 0)
     {
         return 0;
-    }
-
-    if (ply_from_root > 0)
-    {
-
-        // https://github.com/SebLague/Chess-AI/blob/d0832f8f1d32ddfb95525d1f1e5b772a367f272e/Assets/Scripts/Core/AI/Search.cs#L130
-        // Skip this position if a mating sequence has already been found earlier in
-        // the search, which would be shorter than any mate we could find from here.
-        // This is done by observing that alpha can't possibly be worse (and likewise
-        // beta can't  possibly be better) than being mated in the current position.
-        alpha = MAX(alpha, -MATE_VALUE + ply_from_root);
-        beta = MIN(beta, MATE_VALUE - ply_from_root);
-        if (alpha >= beta)
-        {
-            return alpha;
-        }
     }
 
     Move *cache_move = NULL;
@@ -373,14 +385,35 @@ static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_r
     {
         cache_move = &cache_entry->move;
 
-        // If equal depth, can return cached move
-        if (cache_entry->depth == depth)
+        if (cache_entry->depth >= depth)
         {
-            if (out_move != NULL)
+            double cache_value = correct_score_get(cache_entry->value, ply_from_root);
+
+            if (cache_entry->type == CacheEntryType_EXACT)
             {
-                *out_move = cache_entry->move;
+                if (out_move != NULL)
+                {
+                    *out_move = cache_entry->move;
+                }
+                return cache_value;
             }
-            return cache_entry->value;
+            else if (cache_entry->type == CacheEntryType_LOWERBOUND)
+            {
+                alpha = MAX(alpha, cache_value);
+            }
+            else if (cache_entry->type == CacheEntryType_UPPERBOUND)
+            {
+                beta = MIN(beta, cache_value);
+            }
+
+            if (alpha >= beta)
+            {
+                if (out_move != NULL)
+                {
+                    *out_move = cache_entry->move;
+                }
+                return cache_value;
+            }
         }
     }
 
@@ -429,11 +462,11 @@ static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_r
         {
             if (is_in_check(bs, bs->turn))
             {
-                value = -(MATE_VALUE - ply_from_root);
+                return -(MATE_VALUE - ply_from_root);
             }
             else
             {
-                value = DRAW_VALUE;
+                return DRAW_VALUE;
             }
         }
 
@@ -443,15 +476,32 @@ static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_r
         }
     }
 
-    // TODO: try not replace if lower depth?
-    // TODO: upper lower bounds?
+    // Do not cache if aborting
+    if (abort_search != NULL && SDL_AtomicGet(abort_search) > 0)
+    {
+        return 0;
+    }
+
     // Fill cache
-    cache_set(&cache, (CacheEntry){
-                          .key = bs->zobrist_hash,
-                          .value = value,
-                          .depth = depth,
-                          .move = best_move,
-                      });
+    CacheEntry entry = {
+        .key = bs->zobrist_hash,
+        .value = correct_score_set(value, ply_from_root),
+        .depth = depth,
+        .move = best_move,
+    };
+    if (value <= alphaOriginal)
+    {
+        entry.type = CacheEntryType_UPPERBOUND;
+    }
+    else if (value >= beta)
+    {
+        entry.type = CacheEntryType_LOWERBOUND;
+    }
+    else
+    {
+        entry.type = CacheEntryType_EXACT;
+    }
+    cache_set(&cache, entry);
 
     return value;
 }
@@ -515,14 +565,22 @@ Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs)
             break;
         }
 
-        printf("info depth %d nodes %llu score cp %f\n", depth, count, s);
+        printf("info depth %d nodes %llu ", depth, count);
+        if (is_mate_score(s))
+        {
+            printf("score mate %d", (int)ceil((double)ply_to_mate(s) / 2.0));
+        }
+        else
+        {
+            printf("score cp %d", (int)s);
+        }
+        printf("\n");
 
         best_move = new_move;
         depth++;
 
 #define DEBUG_SEARCH_MOVE
 #ifdef DEBUG_SEARCH_MOVE
-        printf("DEPTH %d evaluate %llu score %f\n", depth, count, s);
         char buffer[6];
         move_to_long_notation(best_move, buffer);
         printf("%s\n", buffer);

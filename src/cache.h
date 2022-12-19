@@ -7,10 +7,18 @@
 extern "C" {
 #endif
 
+typedef enum CacheEntryType
+{
+    CacheEntryType_EXACT,
+    CacheEntryType_LOWERBOUND,
+    CacheEntryType_UPPERBOUND,
+} CacheEntryType;
+
 typedef struct CacheEntry
 {
     bool is_set;
     uint64_t key;
+    CacheEntryType type;
     double value;
     Move move;
     int depth;
