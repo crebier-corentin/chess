@@ -140,7 +140,7 @@ void main_search(int argc, char *argv[])
         make_move(&bs, input_move);
         print_board(&bs);
 
-        Move m = search_move(&bs, depth);
+        Move m = search_move_easy(&bs, depth);
         make_move(&bs, m);
         char buffer[6];
         move_to_long_notation(m, buffer);
@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 
     BoardState bs = load_fen(fen);
 
-    Move m = search_move(&bs, 20);
+    Move m = search_move_easy(&bs, 20);
     char buffer[6];
     move_to_long_notation(m, buffer);
     printf("%s\n", buffer);

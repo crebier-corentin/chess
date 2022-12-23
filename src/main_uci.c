@@ -1,3 +1,4 @@
+#include "array.h"
 #include "board.h"
 #include "common.h"
 #include "evaluation.h"
@@ -6,6 +7,7 @@
 #include <SDL.h>
 #include <errno.h>
 #include <pcre2.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -80,7 +82,7 @@ bool starts_with(const char *pre, const char *str)
     return lenstr < lenpre ? false : memcmp(pre, str, lenpre) == 0;
 }
 
-BoardState parse_position_command(char *line)
+BoardState parse_position_command(char *line, Array(uint64_t) * seen_positions)
 {
     static pcre2_code *position_regex = NULL;
     if (position_regex == NULL)
@@ -133,6 +135,7 @@ BoardState parse_position_command(char *line)
         char *move = strtok((char *)moves_buffer, " ");
         while (move != NULL)
         {
+            array_push(*seen_positions, bs.zobrist_hash);
             make_move(&bs, parse_long_notation(&bs, move));
 
             move = strtok(NULL, " ");
@@ -147,6 +150,7 @@ BoardState parse_position_command(char *line)
 }
 
 BoardState bs;
+Array(uint64_t) seen_positions;
 SDL_atomic_t abort_search;
 SDL_TimerID abort_timer_id;
 
@@ -178,7 +182,7 @@ int search_moves_task(void *_)
     (void)_;
 
     SDL_AtomicSet(&abort_search, 0);
-    Move best_move = search_move_abortable(&abort_search, &bs);
+    Move best_move = search_move_abortable(&abort_search, &bs, &seen_positions);
 
     char buffer[6] = {0};
     move_to_long_notation(best_move, buffer);
@@ -226,7 +230,9 @@ bool handle_command(char *line)
     }
     else if (starts_with("position", line))
     {
-        bs = parse_position_command(line);
+        array_free(seen_positions);
+        seen_positions = array_create(uint64_t);
+        bs = parse_position_command(line, &seen_positions);
     }
     else if (starts_with("go", line))
     {
@@ -262,6 +268,7 @@ int main(int argc, char *argv[])
     }
 
     bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    seen_positions = array_create(uint64_t);
 
     COMMAND_EVENT = SDL_RegisterEvents(1);
     SDL_CreateThread(&command_reader_task, "stdin reader", NULL);

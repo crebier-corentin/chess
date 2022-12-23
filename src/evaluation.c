@@ -368,15 +368,27 @@ static double negamax_captures(SDL_atomic_t *abort_search, BoardState *bs, doubl
     return alpha;
 }
 
-static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_root, int depth, double alpha,
-                      double beta, Move *out_move)
+static double negamax(SDL_atomic_t *abort_search, BoardState *bs, Array(uint64_t) * seen_positions, int ply_from_root,
+                      int depth, double alpha, double beta, Move *out_move)
 {
+    assert(bs != NULL);
+    assert(seen_positions != NULL);
+
     double alphaOriginal = alpha;
 
     // Handle abort
     if (abort_search != NULL && SDL_AtomicGet(abort_search) > 0)
     {
         return 0;
+    }
+
+    // Handle repetition, if position has already been reached, abort search
+    for (size_t i = 0; i < array_len(*seen_positions); i++)
+    {
+        if (bs->zobrist_hash == (*seen_positions)[i])
+        {
+            return DRAW_VALUE;
+        }
     }
 
     Move *cache_move = NULL;
@@ -429,6 +441,7 @@ static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_r
         generate_pseudo_moves(bs, bs->turn, &moves);
         order_moves(bs, moves, cache_move);
 
+        array_push(*seen_positions, bs->zobrist_hash); // Add current position for repetition checks
         bool had_legal_move = false;
         for (size_t i = 0; i < array_len(moves); i++)
         {
@@ -442,7 +455,8 @@ static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_r
             }
             had_legal_move = true;
 
-            double score = -negamax(abort_search, &new_bs, ply_from_root + 1, depth - 1, -beta, -alpha, NULL);
+            double score =
+                -negamax(abort_search, &new_bs, seen_positions, ply_from_root + 1, depth - 1, -beta, -alpha, NULL);
             if (score > value)
             {
                 value = score;
@@ -454,6 +468,7 @@ static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_r
                 break;
             }
         }
+        (void)array_pop(*seen_positions);
 
         array_free(moves);
 
@@ -506,7 +521,17 @@ static double negamax(SDL_atomic_t *abort_search, BoardState *bs, int ply_from_r
     return value;
 }
 
-Move search_move(BoardState *bs, int depth)
+Move search_move_easy(BoardState *bs, int depth)
+{
+
+    Array(uint64_t) seen_positions = array_create(uint64_t);
+    Move best_move = search_move(bs, &seen_positions, depth);
+    array_free(seen_positions);
+
+    return best_move;
+}
+
+Move search_move(BoardState *bs, Array(uint64_t) * seen_positions, int depth)
 {
     assert(bs != NULL);
     assert(depth > 0);
@@ -521,7 +546,7 @@ Move search_move(BoardState *bs, int depth)
     for (int i = 1; i <= depth; i++)
     {
         count = 0;
-        double s = negamax(NULL, bs, 0, i, -INFINITY, INFINITY, &best_move);
+        double s = negamax(NULL, bs, seen_positions, 0, i, -INFINITY, INFINITY, &best_move);
 #define DEBUG_SEARCH_MOVE
 #ifdef DEBUG_SEARCH_MOVE
         printf("DEPTH %d evaluate %llu score %f\n", i, count, s);
@@ -536,7 +561,7 @@ Move search_move(BoardState *bs, int depth)
     return best_move;
 }
 
-Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs)
+Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs, Array(uint64_t) * seen_positions)
 {
     assert(bs != NULL);
     assert(abort_search != NULL);
@@ -549,7 +574,7 @@ Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs)
 
     // Always search at least at depth 1
     Move best_move = {0};
-    negamax(NULL, bs, 0, 1, -INFINITY, INFINITY, &best_move);
+    negamax(NULL, bs, seen_positions, 0, 1, -INFINITY, INFINITY, &best_move);
 
     int depth = 2;
     while (true)
@@ -557,7 +582,7 @@ Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs)
         Move new_move = {0};
 
         count = 0;
-        double score = negamax(abort_search, bs, 0, depth, -INFINITY, INFINITY, &new_move);
+        double score = negamax(abort_search, bs, seen_positions, 0, depth, -INFINITY, INFINITY, &new_move);
 
         // Aborted
         if (SDL_AtomicGet(abort_search) > 0)
@@ -568,7 +593,7 @@ Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs)
         char move_buffer[6];
         move_to_long_notation(best_move, move_buffer);
 
-        printf("info depth %d nodes %" PRId64 " pv %s", depth, count, move_buffer);
+        printf("info depth %d nodes %" PRId64 " pv %s ", depth, count, move_buffer);
         if (is_mate_score(score))
         {
             int mate = (int)ceil((double)ply_to_mate(score) / 2.0);

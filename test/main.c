@@ -1,3 +1,4 @@
+#include "array.h"
 #include "board.h"
 #include "cache.h"
 #include "evaluation.h"
@@ -6,6 +7,7 @@
 #include "perft.h"
 #include "piece.h"
 #include "zobrist.h"
+#include <stdint.h>
 
 TEST test_perft_default()
 {
@@ -122,7 +124,7 @@ TEST test_mate_in_one()
     {
         BoardState bs = load_fen("8/8/8/7R/4Q3/6k1/3R4/K7 w - - 13 9");
         char buffer[6] = {0};
-        move_to_long_notation(search_move(&bs, 3), buffer);
+        move_to_long_notation(search_move_easy(&bs, 3), buffer);
 
         ASSERT_STR_EQ(buffer, "d2g2");
     }
@@ -130,7 +132,7 @@ TEST test_mate_in_one()
     {
         BoardState bs = load_fen("k6r/8/8/8/8/8/PPP5/K7 b - - 0 1");
         char buffer[6] = {0};
-        move_to_long_notation(search_move(&bs, 3), buffer);
+        move_to_long_notation(search_move_easy(&bs, 3), buffer);
 
         ASSERT_STR_EQ(buffer, "h8h1");
     }
@@ -143,28 +145,44 @@ TEST test_mate_in_two()
     {
         BoardState bs = load_fen("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1");
         char buffer[6] = {0};
-        move_to_long_notation(search_move(&bs, 5), buffer);
+        move_to_long_notation(search_move_easy(&bs, 5), buffer);
         ASSERT_STR_EQ(buffer, "a1a6");
 
         make_move(&bs, parse_algebraic_notation(&bs, "Ra6"));
         make_move(&bs, parse_algebraic_notation(&bs, "bxa6"));
 
-        move_to_long_notation(search_move(&bs, 5), buffer);
+        move_to_long_notation(search_move_easy(&bs, 5), buffer);
         ASSERT_STR_EQ(buffer, "b6b7");
     }
 
     {
         BoardState bs = load_fen("r7/3krn2/8/pp3K2/q7/8/8/8 b - - 7 46");
         char buffer[6] = {0};
-        move_to_long_notation(search_move(&bs, 5), buffer);
+        move_to_long_notation(search_move_easy(&bs, 5), buffer);
         ASSERT_STR_EQ(buffer, "a8g8");
 
         make_move(&bs, parse_algebraic_notation(&bs, "Rg8"));
         make_move(&bs, parse_algebraic_notation(&bs, "Kf6"));
 
-        move_to_long_notation(search_move(&bs, 5), buffer);
+        move_to_long_notation(search_move_easy(&bs, 5), buffer);
         ASSERT_STR_EQ(buffer, "a4f4");
     }
+
+    PASS();
+}
+
+TEST test_repetition()
+{
+    Array(uint64_t) seen_positions = array_create(uint64_t);
+    array_push(seen_positions, load_fen("k7/8/8/7p/6pP/6PR/K6P/8 b - - 0 1").zobrist_hash);
+    array_push(seen_positions, load_fen("k7/8/8/7p/6pP/6PR/7P/1K6 b - - 0 1").zobrist_hash);
+
+    BoardState bs = load_fen("k7/8/8/7p/6pP/6PR/7P/K7 w - - 0 1");
+    char buffer[6] = {0};
+    move_to_long_notation(search_move(&bs, &seen_positions, 5), buffer);
+    ASSERT_STR_EQ(buffer, "a1b2");
+
+    array_free(seen_positions);
 
     PASS();
 }
@@ -189,6 +207,8 @@ int main(int argc, char **argv)
 
     RUN_TEST(test_mate_in_one);
     RUN_TEST(test_mate_in_two);
+
+    RUN_TEST(test_repetition);
 
     GREATEST_MAIN_END();
 }
