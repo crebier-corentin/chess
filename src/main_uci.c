@@ -4,9 +4,7 @@
 #include "move.h"
 #include "zobrist.h"
 #include <SDL.h>
-#include <SDL_atomic.h>
-#include <SDL_thread.h>
-#include <SDL_timer.h>
+#include <errno.h>
 #include <pcre2.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -257,7 +255,7 @@ int main(int argc, char *argv[])
 
     zobrist_init();
 
-    if (SDL_Init(SDL_INIT_TIMER) != 0)
+    if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_EVENTS) != 0)
     {
         fprintf(stderr, "%s\n", SDL_GetError());
         abort();

@@ -106,7 +106,7 @@ void main_perft(int argc, char *argv[])
     }
     else
     {
-        printf("%llu\n", perft(bs, depth));
+        printf("%zu\n", perft(bs, depth));
     }
 }
 

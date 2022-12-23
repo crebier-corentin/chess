@@ -557,7 +557,7 @@ Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs)
         Move new_move = {0};
 
         count = 0;
-        double s = negamax(abort_search, bs, 0, depth, -INFINITY, INFINITY, &new_move);
+        double score = negamax(abort_search, bs, 0, depth, -INFINITY, INFINITY, &new_move);
 
         // Aborted
         if (SDL_AtomicGet(abort_search) > 0)
@@ -565,27 +565,24 @@ Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs)
             break;
         }
 
-        printf("info depth %d nodes %llu ", depth, count);
-        if (is_mate_score(s))
+        char move_buffer[6];
+        move_to_long_notation(best_move, move_buffer);
+
+        printf("info depth %d nodes %" PRId64 " pv %s", depth, count, move_buffer);
+        if (is_mate_score(score))
         {
-            printf("score mate %d", (int)ceil((double)ply_to_mate(s) / 2.0));
+            int mate = (int)ceil((double)ply_to_mate(score) / 2.0);
+            mate *= (bs->turn == C_WHITE ? 1 : -1); // negate mate if getting mated
+            printf("score mate %d", mate);
         }
         else
         {
-            printf("score cp %d", (int)s);
+            printf("score cp %d", (int)score);
         }
         printf("\n");
 
         best_move = new_move;
         depth++;
-
-#define DEBUG_SEARCH_MOVE
-#ifdef DEBUG_SEARCH_MOVE
-        char buffer[6];
-        move_to_long_notation(best_move, buffer);
-        printf("%s\n", buffer);
-
-#endif
     }
 
     return best_move;
