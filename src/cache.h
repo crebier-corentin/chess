@@ -36,8 +36,6 @@ void cache_free(Cache *cache);
 CacheEntry *cache_get(Cache *cache, uint64_t key);
 void cache_set(Cache *cache, CacheEntry entry);
 
-void cache_print_debug(Cache *cache);
-
 #ifdef __cplusplus
 }
 #endif

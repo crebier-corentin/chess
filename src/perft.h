@@ -4,6 +4,10 @@
 #include "common.h"
 #include <SDL.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 size_t perft(BoardState bs, int depth);
 
 typedef struct PerftArgs
@@ -20,3 +24,7 @@ int perft_thread_sdl(void *args);
 uint64_t perft_thread_sched(BoardState *bs, int depth);
 
 void divide(BoardState bs, int depth);
+
+#ifdef __cplusplus
+}
+#endif

@@ -546,16 +546,7 @@ Move search_move(BoardState *bs, Array(uint64_t) * seen_positions, int depth)
     for (int i = 1; i <= depth; i++)
     {
         count = 0;
-        double s = negamax(NULL, bs, seen_positions, 0, i, -INFINITY, INFINITY, &best_move);
-#define DEBUG_SEARCH_MOVE
-#ifdef DEBUG_SEARCH_MOVE
-        printf("DEPTH %d evaluate %llu score %f\n", i, count, s);
-        // char buffer[6];
-        // move_to_long_notation(best_move, buffer);
-        // printf("%s\n", buffer);
-
-        cache_print_debug(&cache);
-#endif
+        negamax(NULL, bs, seen_positions, 0, i, -INFINITY, INFINITY, &best_move);
     }
 
     return best_move;

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "common.h"
-#include <stb_ds.h>
 
 #ifdef __cplusplus
 extern "C" {

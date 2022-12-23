@@ -1,9 +1,6 @@
 #include "array.h"
 #include <string.h>
 
-#define STB_DS_IMPLEMENTATION
-#include <stb_ds.h>
-
 void *array_create_size_func(size_t elSize, size_t cap)
 {
     ArrayHeader *header = malloc(sizeof(ArrayHeader) + elSize * cap);

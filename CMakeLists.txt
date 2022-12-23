@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(
-  cocolib
+  chess
   VERSION 1
   LANGUAGES C CXX)
 
@@ -17,10 +17,6 @@ if(MSVC)
   add_compile_options(/W4 /arch:AVX2)
   set(CMAKE_INCLUDE_SYSTEM_FLAG_C "-external:I") # fix issue with clang-tidy not recognizing -external:I with a space
 
-# if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-# add_compile_options(/fsanitize=address)
-# set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF) # incompatible with address
-# sanitizer endif()
 else()
   add_compile_options(-Wall -Wextra -Wpedantic -march=native)
 
@@ -36,7 +32,7 @@ find_package(SDL2 CONFIG REQUIRED)
 find_package(Threads)
 
 add_library(libchess STATIC src/board.c src/piece.c src/move.c src/array.c
-  src/pgn.c src/perft.c src/zobrist.c src/evaluation.c src/cache.c third_party/siphash.c)
+  src/perft.c src/zobrist.c src/evaluation.c src/cache.c)
 target_compile_definitions(libchess PUBLIC PCRE2_CODE_UNIT_WIDTH=8)
 target_link_libraries(libchess PUBLIC
   ${PCRE2_LIBRARIES}
