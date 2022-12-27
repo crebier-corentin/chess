@@ -26,7 +26,7 @@ typedef enum Color
     C_BLACK
 } Color;
 
-Piece piece_empty();
+Piece piece_empty(void);
 Piece create_piece(PieceType type, Color color);
 
 Color get_color(Piece p);

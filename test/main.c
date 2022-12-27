@@ -9,7 +9,7 @@
 #include "zobrist.h"
 #include <stdint.h>
 
-TEST test_perft_default()
+TEST test_perft_default(void)
 {
     BoardState bs = load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 ");
     ASSERT_EQ(perft_thread_sched(&bs, 1), 20);
@@ -21,7 +21,7 @@ TEST test_perft_default()
     PASS();
 }
 
-TEST test_perft_kiwipete()
+TEST test_perft_kiwipete(void)
 {
     BoardState bs = load_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
     ASSERT_EQ(perft_thread_sched(&bs, 1), 48);
@@ -31,7 +31,7 @@ TEST test_perft_kiwipete()
     PASS();
 }
 
-TEST test_perft_6()
+TEST test_perft_6(void)
 {
     BoardState bs = load_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10");
     ASSERT_EQ(perft_thread_sched(&bs, 1), 46);
@@ -42,7 +42,7 @@ TEST test_perft_6()
     PASS();
 }
 
-TEST test_piece_list()
+TEST test_piece_list(void)
 {
     BoardState bs = load_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
 
@@ -65,7 +65,7 @@ TEST test_piece_list()
     PASS();
 }
 
-TEST test_zobrist_hash()
+TEST test_zobrist_hash(void)
 {
     {
         BoardState bs1 = load_fen("k7/8/8/8/8/8/8/K7 w - - 0 1");
@@ -107,7 +107,7 @@ TEST test_zobrist_hash()
     PASS();
 }
 
-TEST test_is_in_check()
+TEST test_is_in_check(void)
 {
     BoardState bs = load_fen("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1");
     make_move(&bs, parse_algebraic_notation(&bs, "Ra6"));
@@ -119,7 +119,7 @@ TEST test_is_in_check()
     PASS();
 }
 
-TEST test_mate_in_one()
+TEST test_mate_in_one(void)
 {
     {
         BoardState bs = load_fen("8/8/8/7R/4Q3/6k1/3R4/K7 w - - 13 9");
@@ -140,7 +140,7 @@ TEST test_mate_in_one()
     PASS();
 }
 
-TEST test_mate_in_two()
+TEST test_mate_in_two(void)
 {
     {
         BoardState bs = load_fen("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1");
@@ -171,7 +171,7 @@ TEST test_mate_in_two()
     PASS();
 }
 
-TEST test_repetition()
+TEST test_repetition(void)
 {
     Array(uint64_t) seen_positions = array_create(uint64_t);
     array_push(seen_positions, load_fen("k7/8/8/7p/6pP/6PR/K6P/8 b - - 0 1").zobrist_hash);

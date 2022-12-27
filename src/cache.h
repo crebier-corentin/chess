@@ -1,5 +1,6 @@
 #include "common.h"
 #include "move.h"
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -16,12 +17,12 @@ typedef enum CacheEntryType
 
 typedef struct CacheEntry
 {
-    bool is_set;
     uint64_t key;
-    CacheEntryType type;
     double value;
-    Move move;
     int depth;
+    Move move;
+    uint8_t type;
+    bool is_set;
 } CacheEntry;
 
 typedef struct Cache
@@ -30,7 +31,7 @@ typedef struct Cache
     CacheEntry *entries;
 } Cache;
 
-Cache cache_create();
+Cache cache_create(void);
 void cache_free(Cache *cache);
 
 CacheEntry *cache_get(Cache *cache, uint64_t key);

@@ -17,12 +17,13 @@ void pos_to_string(Pos pos, char *buffer)
     buffer[1] = '1' + (7 - pos.y);
     buffer[2] = '\0';
 }
-Pos parse_pos(Pos pos, char *buffer)
+Pos parse_pos(char *buffer)
 {
     assert(buffer != NULL);
     assert(buffer[0] >= 'a' && buffer[0] <= 'h');
     assert(buffer[1] >= '1' && buffer[1] <= '8');
 
+    Pos pos = {0};
     pos.x = buffer[0] - 'a';
     pos.y = 7 - (buffer[1] - '1');
     return pos;
@@ -48,10 +49,31 @@ PieceType promotion_to_piece_type(Promotion promotion)
     }
 }
 
+#define MOVE_EN_PASSANT_MASK (1 << 5)
+#define MOVE_PROMOTION_MASK ((1 << 2) | (1 << 3) | (1 << 4))
+#define MOVE_CASTLE_MASK ((1 << 1) | 1)
+
+Move move_create(Pos from, Pos to, Promotion promotion, Castle castle, bool en_passant)
+{
+    return (Move){.from = from, .to = to, .special = (en_passant << 5) | (promotion << 2) | castle};
+}
+bool move_get_en_passant(Move *m)
+{
+    return (bool)((m->special & MOVE_EN_PASSANT_MASK) >> 5);
+}
+Promotion move_get_promotion(Move *m)
+{
+    return (Promotion)((m->special & MOVE_PROMOTION_MASK) >> 2);
+}
+Castle move_get_castle(Move *m)
+{
+    return (Castle)(m->special & MOVE_CASTLE_MASK);
+}
+
 bool move_equals(Move a, Move b)
 {
     return a.to.x == b.to.x && a.to.y == b.to.y && a.from.x == b.from.x && a.from.y == b.from.y &&
-           a.promotion == b.promotion && a.castle == b.castle && a.en_passant == b.en_passant;
+           a.special == b.special;
 }
 
 void move_to_long_notation(Move move, char buffer[6])
@@ -61,7 +83,7 @@ void move_to_long_notation(Move move, char buffer[6])
     pos_to_string(move.from, buffer);
     pos_to_string(move.to, buffer + 2);
 
-    switch (move.promotion)
+    switch (move_get_promotion(&move))
     {
     case PROMOTION_QUEEN:
         buffer[4] = 'q';
@@ -112,39 +134,36 @@ Move parse_long_notation(BoardState *bs, char buffer[6])
 {
     assert(buffer != NULL);
 
-    Move move = {0};
-    move.from = parse_pos(move.from, buffer);
-    move.to = parse_pos(move.to, buffer + 2);
+    Pos from = parse_pos(buffer);
+    Pos to = parse_pos(buffer + 2);
 
-    move.promotion = char_to_promotion(buffer[4]);
+    Promotion promotion = char_to_promotion(buffer[4]);
 
     // Check castle
-    if (move.from.x == 4 && move.from.y == 0 && move.to.x == 6 && move.to.y == 0)
+    Castle castle = CASTLE_NONE;
+    if (from.x == 4 && from.y == 0 && to.x == 6 && to.y == 0)
     {
-        move.castle = CASTLE_KINGSIDE;
+        castle = CASTLE_KINGSIDE;
     }
-    else if (move.from.x == 4 && move.from.y == 0 && move.to.x == 2 && move.to.y == 0)
+    else if (from.x == 4 && from.y == 0 && to.x == 2 && to.y == 0)
     {
-        move.castle = CASTLE_QUEENSIDE;
+        castle = CASTLE_QUEENSIDE;
     }
-    else if (move.from.x == 4 && move.from.y == 7 && move.to.x == 6 && move.to.y == 7)
+    else if (from.x == 4 && from.y == 7 && to.x == 6 && to.y == 7)
     {
-        move.castle = CASTLE_KINGSIDE;
+        castle = CASTLE_KINGSIDE;
     }
-    else if (move.from.x == 4 && move.from.y == 7 && move.to.x == 2 && move.to.y == 7)
+    else if (from.x == 4 && from.y == 7 && to.x == 2 && to.y == 7)
     {
-        move.castle = CASTLE_QUEENSIDE;
+        castle = CASTLE_QUEENSIDE;
     }
 
     // Check en passant
     int en_passant_y = bs->turn == C_WHITE ? 2 : 5;
-    if (move.to.y == en_passant_y && is_pawn(get_piece(bs, move.from)) && is_empty(get_piece(bs, move.to)) &&
-        is_pawn(get_piece(bs, (Pos){move.to.x, move.from.y})))
-    {
-        move.en_passant = true;
-    }
+    bool en_passant = to.y == en_passant_y && is_pawn(get_piece(bs, from)) && is_empty(get_piece(bs, to)) &&
+                      is_pawn(get_piece(bs, (Pos){to.x, from.y}));
 
-    return move;
+    return move_create(from, to, promotion, castle, en_passant);
 }
 
 #define POS_NOT_SPECIFIED -9
@@ -329,7 +348,7 @@ Move parse_algebraic_notation(BoardState *bs, char *buffer)
         Move move = moves[i];
 
         // For castles, only need to match castle property, rest is ignored
-        if (an.castle != CASTLE_NONE && an.castle == move.castle)
+        if (an.castle != CASTLE_NONE && an.castle == move_get_castle(&move))
         {
             matching_move = move;
             break;
@@ -350,7 +369,7 @@ Move parse_algebraic_notation(BoardState *bs, char *buffer)
             continue;
 
         // match promotion
-        if (an.promotion != PROMOTION_NONE && an.promotion != move.promotion)
+        if (an.promotion != PROMOTION_NONE && an.promotion != move_get_promotion(&move))
             continue;
 
         matching_move = move;

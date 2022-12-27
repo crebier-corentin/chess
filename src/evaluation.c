@@ -214,7 +214,7 @@ static double evaluate_move(BoardState *bs, Move *move, Move *cache_move, bool p
         score += 10 * piece_value[get_type(capture_piece)] - piece_value[get_type(move_piece)];
     }
 
-    switch (move->promotion)
+    switch (move_get_promotion(move))
     {
     case PROMOTION_NONE:
         break;
@@ -387,7 +387,7 @@ static double negamax(SDL_atomic_t *abort_search, BoardState *bs, Array(uint64_t
     {
         if (bs->zobrist_hash == (*seen_positions)[i])
         {
-            return DRAW_VALUE;
+            return -20; // Repetitions are boring avoid them
         }
     }
 
@@ -497,6 +497,7 @@ static double negamax(SDL_atomic_t *abort_search, BoardState *bs, Array(uint64_t
         return 0;
     }
 
+    // TODO: don't store repetition draws in cache
     // Fill cache
     CacheEntry entry = {
         .key = bs->zobrist_hash,
@@ -587,8 +588,9 @@ Move search_move_abortable(SDL_atomic_t *abort_search, BoardState *bs, Array(uin
         printf("info depth %d nodes %" PRId64 " pv %s ", depth, count, move_buffer);
         if (is_mate_score(score))
         {
+            int sign = score < 0 ? -1 : 1;
             int mate = (int)ceil((double)ply_to_mate(score) / 2.0);
-            mate *= (bs->turn == C_WHITE ? 1 : -1); // negate mate if getting mated
+            mate *= sign; // negate mate if getting mated
             printf("score mate %d", mate);
         }
         else

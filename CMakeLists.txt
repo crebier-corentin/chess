@@ -18,7 +18,7 @@ if(MSVC)
   set(CMAKE_INCLUDE_SYSTEM_FLAG_C "-external:I") # fix issue with clang-tidy not recognizing -external:I with a space
 
 else()
-  add_compile_options(-Wall -Wextra -Wpedantic -march=native)
+  add_compile_options(-Wall -Wextra -Wpedantic -march=native -Wpadded -Wpacked)
 
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_options(-fno-omit-frame-pointer -fsanitize=address)

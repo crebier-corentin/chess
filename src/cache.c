@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-Cache cache_create()
+Cache cache_create(void)
 {
     Cache c = {0};
     c.cap = (268435456LLU * 4) / sizeof(CacheEntry); // 1Gb

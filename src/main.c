@@ -148,6 +148,26 @@ void main_search(int argc, char *argv[])
     }
 }
 
+void main_divide(int argc, char *argv[])
+{
+    int depth = atoi(argv[1]);
+    char *fen = argv[2];
+
+    BoardState bs = load_fen(fen);
+
+    if (argc >= 4)
+    {
+        char *move_str = strtok(argv[3], " ");
+        while (move_str != NULL)
+        {
+            make_move(&bs, parse_long_notation(&bs, move_str));
+            move_str = strtok(NULL, " ");
+        }
+    }
+
+    divide(bs, depth);
+}
+
 int main(int argc, char *argv[])
 {
     zobrist_init();
@@ -159,13 +179,14 @@ int main(int argc, char *argv[])
     SetConsoleOutputCP(65001); // unicode
 #endif
     //  main_search(argc, argv);
+    // main_divide(argc, argv);
 
-    char *fen = "k7/1b6/8/8/8/8/PP6/K7 w - - 0 1";
-    // char *fen = "rnbqk2r/pppp2P1/3b1n2/4p2p/7P/3N2P1/PPPP1P2/RNBQKB1R b KQkq - 0 9";
+    // char *fen = "k7/1b6/8/8/8/8/PP6/K7 w - - 0 1";
+    char *fen = "rnbqk2r/pppp2P1/3b1n2/4p2p/7P/3N2P1/PPPP1P2/RNBQKB1R b KQkq - 0 9";
 
     BoardState bs = load_fen(fen);
 
-    Move m = search_move_easy(&bs, 20);
+    Move m = search_move_easy(&bs, 10);
     char buffer[6];
     move_to_long_notation(m, buffer);
     printf("%s\n", buffer);

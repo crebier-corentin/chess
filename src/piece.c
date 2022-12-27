@@ -1,6 +1,6 @@
 #include "piece.h"
 
-Piece piece_empty()
+Piece piece_empty(void)
 {
     return (Piece)0;
 }

@@ -454,9 +454,9 @@ void make_move(BoardState *bs, Move move)
     bs->en_passant_y = NO_EN_PASSANT;
 
     // Castle
-    if (is_king(p) && move.castle != CASTLE_NONE)
+    if (is_king(p) && move_get_castle(&move) != CASTLE_NONE)
     {
-        if (move.castle == CASTLE_KINGSIDE)
+        if (move_get_castle(&move) == CASTLE_KINGSIDE)
         {
             // Move king
             Pos kingPos = move.from;
@@ -493,7 +493,7 @@ void make_move(BoardState *bs, Move move)
         set_piece(bs, move.from, piece_empty());
 
         // En passant
-        if (is_pawn(p) && move.en_passant)
+        if (is_pawn(p) && move_get_en_passant(&move))
         {
             Pos enPassantPos = move.to;
             enPassantPos.y = move.from.y;
@@ -503,9 +503,9 @@ void make_move(BoardState *bs, Move move)
         }
 
         // Promotion
-        if (is_pawn(p) && (move.to.y == 0 || move.to.y == 7) && move.promotion != PROMOTION_NONE)
+        if (is_pawn(p) && (move.to.y == 0 || move.to.y == 7) && move_get_promotion(&move) != PROMOTION_NONE)
         {
-            set_piece(bs, move.to, create_piece(promotion_to_piece_type(move.promotion), get_color(p)));
+            set_piece(bs, move.to, create_piece(promotion_to_piece_type(move_get_promotion(&move)), get_color(p)));
         }
 
         // Double step set en passant
@@ -618,7 +618,7 @@ static void generate_step_pseudo_move(BoardState *bs, Pos pos, Pos target_pos, A
         return;
     }
 
-    Move move = {pos, target_pos, false, CASTLE_NONE, PROMOTION_NONE};
+    Move move = move_create(pos, target_pos, PROMOTION_NONE, CASTLE_NONE, false);
     array_push(*out_moves, move);
 }
 
@@ -635,7 +635,7 @@ static void generate_slide_pseudo_moves(BoardState *bs, Pos pos, int8_t directio
         Piece p = get_piece(bs, target_pos);
         if (is_empty(p))
         {
-            Move move = {pos, target_pos, PROMOTION_NONE, CASTLE_NONE, false};
+            Move move = move_create(pos, target_pos, PROMOTION_NONE, CASTLE_NONE, false);
             array_push(*out_moves, move);
         }
         else
@@ -643,7 +643,7 @@ static void generate_slide_pseudo_moves(BoardState *bs, Pos pos, int8_t directio
             // Capture
             if (get_color(p) != get_color(get_piece(bs, pos)))
             {
-                Move move = {pos, target_pos, PROMOTION_NONE, CASTLE_NONE, false};
+                Move move = move_create(pos, target_pos, PROMOTION_NONE, CASTLE_NONE, false);
                 array_push(*out_moves, move);
             }
 
@@ -661,18 +661,18 @@ static void generate_pawn_pseudo_moves_step(Pos pos, Pos target_pos, int8_t endi
     // Final rank, all promotions
     if (target_pos.y == ending_y)
     {
-        Move move = {pos, target_pos, PROMOTION_QUEEN, CASTLE_NONE, en_passant};
+        Move move = move_create(pos, target_pos, PROMOTION_QUEEN, CASTLE_NONE, en_passant);
         array_push(*out_moves, move);
-        move.promotion = PROMOTION_ROOK;
+        move = move_create(pos, target_pos, PROMOTION_ROOK, CASTLE_NONE, en_passant);
         array_push(*out_moves, move);
-        move.promotion = PROMOTION_BISHOP;
+        move = move_create(pos, target_pos, PROMOTION_BISHOP, CASTLE_NONE, en_passant);
         array_push(*out_moves, move);
-        move.promotion = PROMOTION_KNIGHT;
+        move = move_create(pos, target_pos, PROMOTION_KNIGHT, CASTLE_NONE, en_passant);
         array_push(*out_moves, move);
     }
     else
     {
-        Move move = {pos, target_pos, PROMOTION_NONE, CASTLE_NONE, en_passant};
+        Move move = move_create(pos, target_pos, PROMOTION_NONE, CASTLE_NONE, en_passant);
         array_push(*out_moves, move);
     }
 }
@@ -691,7 +691,7 @@ static void generate_pawn_pseudo_moves_for_color(BoardState *bs, Pos pos, int8_t
             Pos double_step_pos = {pos.x, pos.y + 2 * direction};
             if (get_piece(bs, double_step_pos) == piece_empty())
             {
-                Move move = {pos, double_step_pos, PROMOTION_NONE, CASTLE_NONE, false};
+                Move move = move_create(pos, double_step_pos, PROMOTION_NONE, CASTLE_NONE, false);
                 array_push(*out_moves, move);
             }
         }
@@ -865,13 +865,13 @@ void generate_king_pseudo_moves(BoardState *bs, Pos pos, Array(Move) * out_moves
 
     if (can_castle_kingside && !attack_map[4][pos.y] && !attack_map[5][pos.y] && !attack_map[6][pos.y])
     {
-        Move move = (Move){pos, (Pos){pos.x + 2, pos.y}, PROMOTION_NONE, CASTLE_KINGSIDE, false};
+        Move move = move_create(pos, (Pos){pos.x + 2, pos.y}, PROMOTION_NONE, CASTLE_KINGSIDE, false);
         array_push(*out_moves, move);
     }
 
     if (can_castle_queenside && !attack_map[4][pos.y] && !attack_map[3][pos.y] && !attack_map[2][pos.y])
     {
-        Move move = (Move){pos, (Pos){pos.x - 2, pos.y}, PROMOTION_NONE, CASTLE_QUEENSIDE, false};
+        Move move = move_create(pos, (Pos){pos.x - 2, pos.y}, PROMOTION_NONE, CASTLE_QUEENSIDE, false);
         array_push(*out_moves, move);
     }
 }
@@ -1068,6 +1068,7 @@ static void generate_pawn_attack_map(BoardState *bs, Pos pos, bool out_map[8][8]
     generate_step_attack_map((Pos){pos.x + 1, pos.y + direction}, out_map);
 }
 
+#if 0
 static void generate_piece_attack_map(BoardState *bs, Pos pos, bool out_map[8][8])
 {
     assert(bs != NULL);
@@ -1102,6 +1103,7 @@ static void generate_piece_attack_map(BoardState *bs, Pos pos, bool out_map[8][8
     }
     }
 }
+#endif
 
 void generate_attack_map(BoardState *bs, Color color, bool out_map[8][8])
 {

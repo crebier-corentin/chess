@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-static uint64_t get_64_rand()
+static uint64_t get_64_rand(void)
 {
     return (((uint64_t)rand() << 0) & 0x000000000000FFFFull) | (((uint64_t)rand() << 16) & 0x00000000FFFF0000ull) |
            (((uint64_t)rand() << 32) & 0x0000FFFF00000000ull) | (((uint64_t)rand() << 48) & 0xFFFF000000000000ull);
@@ -20,7 +20,7 @@ typedef struct ZobristTable
 
 static ZobristTable zobrist_table = {0};
 
-void zobrist_init()
+void zobrist_init(void)
 {
     srand(time(NULL));
     for (int c = 0; c < 2; c++)
@@ -55,7 +55,7 @@ uint64_t zobrist_piece(Piece p, Pos pos)
     return zobrist_table.pieces[get_color(p) - 1][get_type(p) - 1][pos.x][pos.y];
 }
 
-uint64_t zobrist_black()
+uint64_t zobrist_black(void)
 {
     return zobrist_table.black_turn;
 }
